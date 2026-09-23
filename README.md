@@ -1,0 +1,136 @@
+<div align="center">
+  <img src="./logo.png" alt="字幕工作室" width="72" />
+  <h1>字幕工作室</h1>
+  <p>一个纯前端、本地运行的视频字幕编辑与烧录工作台。</p>
+  <p>
+    <strong>无需账号</strong> · <strong>无需后端</strong> · <strong>无水印</strong> · <strong>单文件交付</strong>
+  </p>
+  <p>
+    <a href="https://video-transcript.zishu.me">在线体验</a> ·
+    <a href="./LICENSE">MIT License</a>
+  </p>
+</div>
+
+<p align="center">
+  <img src="./docs/workspace.png" alt="字幕工作室工作台示例" />
+</p>
+
+## 在线体验
+
+无需安装，直接打开 [video-transcript.zishu.me](https://video-transcript.zishu.me) 即可使用。
+
+## 项目简介
+
+字幕工作室用于给本地 MP4 视频添加字幕。导入视频后，可以在时间轴上分段、编辑文字、调整字幕样式，并实时预览最终效果。导出时会重新编码视频轨道并将字幕烧录到画面中，生成可以直接分享的 MP4 文件。
+
+视频、字幕和导出过程都只在当前浏览器中完成，不会上传到服务器。
+
+## 主要功能
+
+| 功能 | 说明 |
+| --- | --- |
+| 本地导入 | 支持拖拽或选择 MP4，展示分辨率、时长、体积、编码和音轨信息 |
+| 时间轴编辑 | 添加、删除、复制字幕段，拖拽调整起止时间，播放头与视频联动 |
+| 实时预览 | 字幕按时间轴显示在视频画面上，播放和编辑所见即所得 |
+| 字幕样式 | 内置多套预设，可调整背景色、文字色、字号、不透明度、位置和对齐方式 |
+| 段落覆盖 | 支持全局默认样式，也支持为单个字幕段单独设置样式 |
+| 本地缓存 | 编辑状态和原视频保存在 IndexedDB，下次打开可继续编辑 |
+| MP4 导出 | 提供接近原画、4K 上限、1080p 上限三档画质，支持保留 AAC 音轨 |
+| 明暗主题 | 支持深色与浅色界面，可跟随使用场景切换 |
+
+## 快速开始
+
+### 环境要求
+
+- Node.js 20.19+（建议使用 Node.js 22 或更高版本）
+- npm
+- Chrome 或 Edge（推荐，WebCodecs 支持最完整）
+
+### 本地开发
+
+```bash
+npm install
+npm run dev
+```
+
+打开终端输出的本地地址，例如 `http://localhost:5173`。
+
+### 构建单文件版本
+
+```bash
+npm run build
+```
+
+构建完成后，所有脚本、样式和依赖都会内联到 `dist/index.html`。可以直接双击该文件使用，也可以运行预览服务：
+
+```bash
+npm run preview
+```
+
+## 使用流程
+
+1. 拖入或选择一个本地 MP4 视频。
+2. 播放视频定位时间点，点击“添加字幕”创建字幕段。
+3. 在右侧时间轴列表中编辑字幕文字，拖动时间轴字幕块调整起止时间。
+4. 在“字幕样式”中设置全局样式，或为当前字幕段单独覆盖样式。
+5. 进入“导出”，选择画质和音轨选项，导出带字幕的 MP4。
+
+## 导出原理
+
+导出链路完全在浏览器内执行：
+
+1. 使用 `mp4box.js` 解析 MP4 轨道和视频样本。
+2. 使用 WebCodecs `VideoDecoder` 解码视频帧。
+3. 将视频帧绘制到 Canvas，并按时间轴叠加字幕。
+4. 使用 WebCodecs `VideoEncoder` 重新编码 H.264 视频轨道。
+5. 将原视频中的 AAC 音频样本直接转封装到新 MP4。
+6. 使用 `mp4-muxer` 封装并下载最终文件。
+
+字幕烧录需要重新编码视频轨道，因此导出文件体积可能与原视频不同，这属于正常现象。
+
+## 技术栈
+
+- React 19
+- TypeScript
+- Vite 8
+- Canvas 2D
+- WebCodecs
+- mp4box.js
+- mp4-muxer
+- vite-plugin-singlefile
+- lucide-react
+
+## 项目结构
+
+```text
+.
+├── docs/
+│   └── workspace.png          # README 工作台截图
+├── src/
+│   ├── lib/
+│   │   ├── export.ts          # 视频重编码与 MP4 导出
+│   │   ├── media.ts           # MP4 解析与视频轨道读取
+│   │   ├── render.ts          # 预览与字幕烧录共用渲染
+│   │   ├── resolution.ts      # 画质、分辨率与码率计算
+│   │   └── storage.ts         # IndexedDB 本地缓存
+│   ├── App.tsx                # 工作台与编辑交互
+│   ├── styles.css             # 界面样式与响应式布局
+│   └── types.ts               # 字幕、样式和导出类型
+├── index.html
+├── LICENSE
+├── package.json
+├── README.md
+└── vite.config.ts
+```
+
+## 兼容性说明
+
+主要导出链路依赖 WebCodecs，推荐使用最新版 Chrome 或 Edge。Safari 和部分来源的视频编码格式可能存在限制；如果浏览器不支持对应的解码或 H.264 编码能力，界面会给出错误提示。
+
+## 本地缓存
+
+浏览器会使用 IndexedDB 保存最近的视频 Blob 和字幕编辑状态。重新打开页面时，可以选择继续编辑或放弃缓存。清理浏览器站点数据会同时删除这些本地内容。
+
+## 开源协议
+
+本项目基于 [MIT License](./LICENSE) 开源。
