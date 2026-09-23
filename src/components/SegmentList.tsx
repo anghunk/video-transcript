@@ -50,17 +50,25 @@ export function SegmentList({
     <div className="segment-list">
       <div className="segment-settings">
         <span>默认时长</span>
-        <label className="inline-setting">
-          <input
-            type="number"
-            min="1"
-            step="1"
-            aria-label="字幕默认时长"
-            value={defaultDuration}
-            onChange={(event) => onChangeDefaultDuration(Math.max(1, Math.round(Number(event.target.value) || 1)))}
-          />
-          <span>秒</span>
-        </label>
+        <div className="segment-settings-actions">
+          {selectedId && (
+            <span className="selection-shortcut">
+              <kbd className="shortcut-hint">Delete</kbd>
+              <span>删除</span>
+            </span>
+          )}
+          <label className="inline-setting">
+            <input
+              type="number"
+              min="1"
+              step="1"
+              aria-label="字幕默认时长"
+              value={defaultDuration}
+              onChange={(event) => onChangeDefaultDuration(Math.max(1, Math.round(Number(event.target.value) || 1)))}
+            />
+            <span>秒</span>
+          </label>
+        </div>
       </div>
       {segments.length > 0 && (
         <div className="segment-rows">
@@ -125,6 +133,7 @@ export function SegmentList({
       >
         <span className="segment-add-icon"><Plus size={17} /></span>
         <span>{segments.length === 0 ? '添加第一条字幕段' : '添加字幕段'}</span>
+        <kbd className="shortcut-hint segment-add-shortcut">⌘/Ctrl + Enter</kbd>
       </button>
     </div>
   );

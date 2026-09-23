@@ -672,6 +672,7 @@ button {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--stage-bg);
+  cursor: pointer;
 }
 
 .preview-video,
@@ -736,7 +737,29 @@ button {
   padding: 0 12px;
   grid-auto-flow: column;
   gap: 6px;
+  font-size: 12px;
   white-space: nowrap;
+}
+
+.shortcut-hint {
+  min-height: 20px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface-muted) 72%, transparent);
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.control-button.text-button .shortcut-hint {
+  margin-left: 2px;
 }
 
 .control-button:hover,
@@ -1087,6 +1110,21 @@ h3 {
   gap: 6px;
 }
 
+.segment-settings-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.selection-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .segment-rows {
   display: flex;
   flex-direction: column;
@@ -1125,6 +1163,10 @@ h3 {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface);
+}
+
+.segment-add-shortcut {
+  margin-left: 2px;
 }
 
 .segment-row {
@@ -1886,6 +1928,11 @@ input[type="color"] {
   .control-button.text-button {
     order: 3;
     margin-left: auto;
+  }
+
+  .control-button.text-button .shortcut-hint,
+  .segment-add-shortcut {
+    display: none;
   }
 
   .timecode {

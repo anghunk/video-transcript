@@ -16,7 +16,6 @@ import {
   Palette,
   Pause,
   Play,
-  Plus,
   RefreshCw,
   RotateCcw,
   Sun,
@@ -754,6 +753,7 @@ function App() {
                   className="preview-video"
                   src={mediaUrl}
                   playsInline
+                  onClick={handlePlayPause}
                   onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
                   onPlay={() => setPlaying(true)}
                   onPause={() => setPlaying(false)}
@@ -784,7 +784,8 @@ function App() {
                 </button>
                 <span className="timecode">{formatClock(currentTime)} / {formatClock(duration)}</span>
                 <button type="button" className="control-button text-button" onClick={handleAddSegment} title="添加字幕（⌘/Ctrl + Enter）">
-                  <Plus size={16} /> 添加字幕
+                  <span>添加字幕</span>
+                  <kbd className="shortcut-hint">⌘/Ctrl + Enter</kbd>
                 </button>
               </div>
 
