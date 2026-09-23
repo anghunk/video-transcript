@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
-import { Copy, Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import type { SubtitleSegment } from '../types';
 import { formatTimestamp, parseTimestamp } from '../lib/format';
 
@@ -13,7 +13,6 @@ interface SegmentListProps {
   onChangeText: (id: string, text: string) => void;
   onChangeStart: (id: string, start: number) => void;
   onChangeEnd: (id: string, end: number) => void;
-  onCopy: (id: string) => void;
   onDelete: (id: string) => void;
   onChangeDefaultDuration: (value: number) => void;
 }
@@ -32,7 +31,6 @@ export function SegmentList({
   onChangeText,
   onChangeStart,
   onChangeEnd,
-  onCopy,
   onDelete,
   onChangeDefaultDuration,
 }: SegmentListProps) {
@@ -113,9 +111,6 @@ export function SegmentList({
                 onClick={(event) => event.stopPropagation()}
               />
               <div className="row-actions">
-                <button type="button" className="mini-button" onClick={(event) => { event.stopPropagation(); onCopy(segment.id); }} title="复制">
-                  <Copy size={15} />
-                </button>
                 <button type="button" className="mini-button danger" onClick={(event) => { event.stopPropagation(); onDelete(segment.id); }} title="删除（Delete / Backspace）">
                   <Trash2 size={15} />
                 </button>

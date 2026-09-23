@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { LoaderCircle, Timer, X } from 'lucide-react';
 
 interface ConfirmDialogProps {
@@ -26,6 +27,16 @@ export function ConfirmDialog({
   onClose,
 }: ConfirmDialogProps) {
   const handleClose = onClose ?? onCancel;
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape' || busy) return;
+      event.preventDefault();
+      handleClose();
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [busy, handleClose]);
 
   return (
     <div className="confirm-backdrop" role="presentation" onMouseDown={handleClose}>

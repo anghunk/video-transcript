@@ -6,7 +6,11 @@ import type {
 } from './media';
 import { extractAllSamples } from './mp4';
 import type { ExportEvents, ExportQuality, SubtitleSegment, SubtitleStyle } from '../types';
-import { resolveExportDimensions, resolveBitrate } from './resolution';
+import {
+  resolveExportDimensions,
+  resolveBitrate,
+  type SourceVideoProfile,
+} from './resolution';
 import { renderFrame, DEFAULT_STYLE } from './render';
 
 type MuxerType = Muxer<ArrayBufferTarget>;
@@ -321,6 +325,12 @@ export async function exportSubtitleVideo(options: ExportOptions): Promise<Blob>
         height,
         runtime.info.frameRate || frameRate,
         exportQuality,
+        {
+          width: runtime.info.width,
+          height: runtime.info.height,
+          bitrate: runtime.info.videoBitrate,
+          codec: runtime.info.videoCodec,
+        } satisfies SourceVideoProfile,
       ),
       framerate: runtime.info.frameRate || frameRate,
       avc: {

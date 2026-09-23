@@ -11,6 +11,7 @@ import {
 import {
   List,
   Download,
+  LoaderCircle,
   LogOut,
   Moon,
   Palette,
@@ -34,7 +35,7 @@ import { SegmentList } from './components/SegmentList';
 import { StylePanel } from './components/StylePanel';
 import { Timeline } from './components/Timeline';
 import { UploadScreen } from './components/UploadScreen';
-import { DEFAULT_STYLE, renderSubtitleOverlay } from './lib/render';
+import { DEFAULT_STYLE, hasActiveSubtitle, renderSubtitleOverlay } from './lib/render';
 import { createSegmentId, clampSegment, sortSegments } from './lib/subtitles';
 import { formatBytes, formatClock } from './lib/format';
 import type { SourceMediaRuntime } from './lib/media';
@@ -49,9 +50,16 @@ import {
 } from './lib/storage';
 
 type WorkspaceTab = 'subtitles' | 'style' | 'export';
+type AppRoute = '/' | '/app';
 
 const THEME_STORAGE_KEY = 'video-transcript-theme';
 const TIMELINE_SNAP_THRESHOLD_PX = 8;
+
+/** 读取当前页面对应的应用路由。 */
+function getCurrentRoute(): AppRoute {
+  const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
+  return pathname === '/app' ? '/app' : '/';
+}
 
 function getInitialTheme(): ThemeMode {
   try {
@@ -69,19 +77,18 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-type ConfirmAction =
-  | { kind: 'cache' }
-  | {
-      kind: 'exit';
-      message: string;
-      confirmText: string;
-      cancelText: string;
-      confirmVariant: 'default' | 'danger';
-      onConfirm: () => void;
-      onCancel: () => void;
-    };
+type ConfirmAction = {
+  kind: 'exit';
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  confirmVariant: 'default' | 'danger';
+  onConfirm: () => void;
+  onCancel: () => void;
+};
 
 function App() {
+  const [route, setRoute] = useState<AppRoute>(getCurrentRoute);
   const [media, setMedia] = useState<SourceMediaRuntime | null>(null);
   const [mediaUrl, setMediaUrl] = useState('');
   const [currentTime, setCurrentTime] = useState(0);
@@ -95,7 +102,6 @@ function App() {
   const [includeAudio, setIncludeAudio] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [waiting, setWaiting] = useState(true);
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('subtitles');
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
@@ -116,6 +122,7 @@ function App() {
     onMove: (event: PointerEvent) => void;
     onUp: () => void;
   } | null>(null);
+  const restoreLockRef = useRef(false);
   const workspaceStateRef = useRef<CachedWorkspace>({
     projectName: '',
     videoSize: 0,
@@ -153,25 +160,34 @@ function App() {
 
   useEffect(() => {
     let animationFrame = 0;
+    // 记录上一次真正绘制的时间点与字幕状态，暂停或空档期直接跳过整块画布重绘。
+    let lastPaintedTime = Number.NaN;
+    let lastHadSubtitle = false;
     function paintOverlay() {
       const video = videoRef.current;
       const canvas = overlayRef.current;
       if (video && canvas && media) {
-        const width = media.info.width || video.videoWidth || 960;
-        const height = media.info.height || video.videoHeight || 540;
-        if (canvas.width !== width || canvas.height !== height) {
-          canvas.width = width;
-          canvas.height = height;
-        }
-        const context = canvas.getContext('2d');
-        if (context) {
-          renderSubtitleOverlay(context, {
-            width,
-            height,
-            time: video.currentTime,
-            segments: sortedSegments,
-            defaultStyle,
-          });
+        const time = video.currentTime;
+        const hasSubtitle = hasActiveSubtitle(sortedSegments, time);
+        if (time !== lastPaintedTime || hasSubtitle !== lastHadSubtitle) {
+          const width = media.info.width || video.videoWidth || 960;
+          const height = media.info.height || video.videoHeight || 540;
+          if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+          }
+          const context = canvas.getContext('2d');
+          if (context) {
+            renderSubtitleOverlay(context, {
+              width,
+              height,
+              time,
+              segments: sortedSegments,
+              defaultStyle,
+            });
+          }
+          lastPaintedTime = time;
+          lastHadSubtitle = hasSubtitle;
         }
       }
       animationFrame = requestAnimationFrame(paintOverlay);
@@ -235,99 +251,136 @@ function App() {
   }, [workspaceTab]);
 
   useEffect(() => {
+    function syncRoute() {
+      if (getCurrentRoute() === '/' && window.location.pathname !== '/') {
+        window.history.replaceState(null, '', '/');
+      }
+      setRoute(getCurrentRoute());
+    }
+
+    syncRoute();
+    window.addEventListener('popstate', syncRoute);
+    return () => window.removeEventListener('popstate', syncRoute);
+  }, []);
+
+  useEffect(() => {
+    if (route !== '/') return;
+
     let cancelled = false;
-    async function checkCache() {
+    void (async () => {
       try {
-        const available = await hasWorkspaceCache();
-        if (cancelled) return;
-        if (!available) {
-          setWaiting(false);
-          return;
-        }
         const [edits, video] = await Promise.all([loadCachedEdits(), loadCachedVideo()]);
         if (cancelled) return;
         if (!edits || !video) {
-          setWaiting(false);
+          setCacheOffer(null);
           return;
         }
         setCacheOffer({
           fileName: video.fileName,
           savedAt: new Date(edits.savedAt).toLocaleString(),
         });
-        setWaiting(false);
       } catch {
-        if (!cancelled) setWaiting(false);
+        if (!cancelled) setCacheOffer(null);
       }
-    }
-    void checkCache();
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [media, route]);
 
-  async function restoreCachedWorkspace() {
+  useEffect(() => {
+    if (route !== '/app' || media || restoreLockRef.current) return;
+
+    restoreLockRef.current = true;
     setRestoring(true);
+    setError('');
+    void (async () => {
+      try {
+        if (!(await hasWorkspaceCache())) {
+          navigate('/', { replace: true });
+          return;
+        }
+        const restored = await restoreCachedWorkspace();
+        if (!restored) navigate('/', { replace: true });
+      } catch (caughtError) {
+        setError(caughtError instanceof Error ? caughtError.message : '恢复缓存失败');
+        navigate('/', { replace: true });
+      } finally {
+        restoreLockRef.current = false;
+        setRestoring(false);
+      }
+    })();
+  }, [media, route]);
+
+  /** 使用 History API 切换应用路由。 */
+  function navigate(path: AppRoute, options: { replace?: boolean } = {}) {
+    if (window.location.pathname !== path) {
+      if (options.replace) window.history.replaceState(null, '', path);
+      else window.history.pushState(null, '', path);
+    }
+    setRoute(path);
+  }
+
+  async function restoreCachedWorkspace(): Promise<boolean> {
     try {
       const [edits, video] = await Promise.all([loadCachedEdits(), loadCachedVideo()]);
-      if (!edits || !video) {
-        setConfirmAction(null);
-        setCacheOffer(null);
-        setWaiting(false);
-        setError('未找到可恢复的缓存，请重新选择视频。');
-        return;
-      }
+      if (!edits || !video) return false;
       const file = new File([video.blob], video.fileName, { type: 'video/mp4' });
-      await openFile(file);
+      const opened = await openFile(file, { cacheVideo: false });
+      if (!opened) return false;
       setSegments(edits.segments);
       setSelectedId(null);
       setDefaultStyle(edits.defaultStyle);
       setDefaultDuration(edits.defaultDuration);
       setQuality(edits.quality);
       setIncludeAudio(edits.includeAudio);
-      setConfirmAction(null);
-      setCacheOffer(null);
-      setWaiting(false);
+      return true;
     } catch (caughtError) {
-      setConfirmAction(null);
       setError(caughtError instanceof Error ? caughtError.message : '恢复缓存失败');
-      setWaiting(false);
-    } finally {
-      setRestoring(false);
+      return false;
     }
   }
 
-  function requestUpload() {
-    if (cacheOffer) {
-      setConfirmAction({ kind: 'cache' });
-      return;
-    }
-    fileInputRef.current?.click();
+  function restoreFromCache() {
+    setRestoring(true);
+    setError('');
+    void restoreCachedWorkspace()
+      .then((restored) => {
+        if (!restored) return;
+        setCacheOffer(null);
+        navigate('/app');
+      })
+      .finally(() => setRestoring(false));
   }
 
   function discardCachedWorkspace() {
-    setConfirmAction(null);
     setCacheOffer(null);
+    setError('');
     void clearWorkspaceCache();
-    setWaiting(false);
-    fileInputRef.current?.click();
   }
 
-  function forgetCachedWorkspace() {
-    setConfirmAction(null);
-    setCacheOffer(null);
-    void clearWorkspaceCache();
+  function requestUpload() {
+    fileInputRef.current?.click();
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    await openFile(file);
+    if (await openFile(file)) {
+      setCacheOffer(null);
+      navigate('/app');
+    }
+    event.target.value = '';
   }
 
-  async function openFile(file: File) {
+  async function openFile(
+    file: File,
+    options: { cacheVideo?: boolean } = {},
+  ): Promise<boolean> {
     if (!file.type.startsWith('video/') && !file.name.toLowerCase().endsWith('.mp4')) {
       setError('请选择 MP4 视频文件');
-      return;
+      return false;
     }
     setError('');
     setLoading(true);
@@ -348,15 +401,16 @@ function App() {
       setDuration(runtime.info.duration);
       setSegments([]);
       setSelectedId(null);
-      void saveCachedVideo(file, file.name);
-      window.setTimeout(persistWorkspace, 500);
+      if (options.cacheVideo !== false) void saveCachedVideo(file, file.name);
       const video = videoRef.current;
       if (video) {
         video.load();
         video.currentTime = 0;
       }
+      return true;
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : '视频解析失败');
+      return false;
     } finally {
       setLoading(false);
     }
@@ -365,7 +419,14 @@ function App() {
   function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
     event.preventDefault();
     const file = event.dataTransfer.files?.[0];
-    if (file) void openFile(file);
+    if (file) {
+      void openFile(file).then((opened) => {
+        if (opened) {
+          setCacheOffer(null);
+          navigate('/app');
+        }
+      });
+    }
   }
 
   function handlePlayPause() {
@@ -412,25 +473,6 @@ function App() {
       ? timelineSelectionTimeRef.current
       : selectedSegment?.end ?? (lastSegmentEnd > 0 ? lastSegmentEnd : currentTime);
     addSegmentAt(preferredStart);
-  }
-
-  function handleCopySegment() {
-    if (!selectedSegment || !media) return;
-    const nextStart = selectedSegment.end;
-    const { start, end } = clampSegment(
-      nextStart,
-      nextStart + Math.max(0.1, selectedSegment.end - selectedSegment.start),
-      duration,
-    );
-    const copy: SubtitleSegment = {
-      ...selectedSegment,
-      id: createSegmentId(),
-      start,
-      end,
-      style: selectedSegment.style ? { ...selectedSegment.style } : undefined,
-    };
-    setSegments((current) => sortSegments([...current, copy]));
-    setSelectedId(copy.id);
   }
 
   function handleDeleteSegment() {
@@ -670,7 +712,11 @@ function App() {
   }
 
   function resetWorkspace(clearCache = true) {
-    if (clearCache) void clearWorkspaceCache();
+    if (clearCache) {
+      setCacheOffer(null);
+      void clearWorkspaceCache();
+    }
+    navigate('/');
     setMedia(null);
     setMediaUrl('');
     setCurrentTime(0);
@@ -722,21 +768,20 @@ function App() {
 
   return (
     <main className="app-shell">
-      {!media ? (
+      {route === '/' ? (
         <UploadScreen
+          cacheOffer={cacheOffer}
           loading={loading}
           error={error}
-          waiting={waiting}
-          cacheOffer={cacheOffer}
           restoring={restoring}
           theme={theme}
           onToggleTheme={toggleTheme}
           onSelect={requestUpload}
-          onRestore={() => void restoreCachedWorkspace()}
-          onDiscard={forgetCachedWorkspace}
+          onRestore={restoreFromCache}
+          onDiscard={discardCachedWorkspace}
           onDrop={handleDrop}
         />
-      ) : (
+      ) : media ? (
         <div className="workspace">
           <div className="workspace-main">
             <section className="preview-column">
@@ -903,12 +948,6 @@ function App() {
                     if (!segment) return;
                     updateSegmentById(id, { end: Math.min(duration, Math.max(value, segment.start + 0.08)) });
                   }}
-                  onCopy={(id) => {
-                    const segment = segments.find((item) => item.id === id);
-                    if (!segment) return;
-                    setSelectedId(id);
-                    setTimeout(() => handleCopySegment(), 0);
-                  }}
                   onDelete={(id) => {
                     setSelectedId(id);
                     setTimeout(() => handleDeleteSegment(), 0);
@@ -943,6 +982,12 @@ function App() {
             </div>
           </aside>
         </div>
+      ) : (
+        <div className="app-loading" role="status" aria-live="polite">
+          <LoaderCircle className="spin" size={24} />
+          <strong>{restoring ? '正在恢复上次项目' : '正在打开工作台'}</strong>
+          <span>正在从本地缓存读取视频和字幕进度，请稍候。</span>
+        </div>
       )}
 
       <input
@@ -953,23 +998,6 @@ function App() {
         onChange={handleFileChange}
       />
 
-      {confirmAction && confirmAction.kind === 'cache' && (
-        <ConfirmDialog
-          title="继续上次编辑？"
-          description={
-            cacheOffer
-              ? `检测到「${cacheOffer.fileName}」的工作台缓存（${cacheOffer.savedAt}）。请选择重新上传，或使用上一次数据继续编辑。`
-              : '检测到未完成的工作台缓存。请选择重新上传，或使用上一次数据继续编辑。'
-          }
-          confirmLabel="使用上一次数据"
-          cancelLabel="重新上传"
-          busy={restoring}
-          busyLabel="正在恢复"
-          onConfirm={() => void restoreCachedWorkspace()}
-          onCancel={discardCachedWorkspace}
-          onClose={() => setConfirmAction(null)}
-        />
-      )}
       {confirmAction && confirmAction.kind === 'exit' && (
         <ConfirmDialog
           title="退出编辑器"

@@ -1,6 +1,5 @@
 import type { ExportQuality, SubtitleSegment, SubtitleStyle } from '../types';
 
-const WORKSPACE_KEY = 'video-transcript-workspace';
 const DB_NAME = 'video-transcript';
 const DB_VERSION = 1;
 const EDIT_STORE = 'edits';
@@ -91,7 +90,7 @@ function deleteRecord(storeName: string): Promise<void> {
   );
 }
 
-/** 判断是否有可恢复的缓存，不会把视频 Blob 加载到内存。 */
+/** 判断是否存在编辑状态与视频 Blob 都完整的可恢复缓存。 */
 export async function hasWorkspaceCache(): Promise<boolean> {
   try {
     const [edit, video] = await Promise.all([
@@ -146,14 +145,5 @@ export async function clearWorkspaceCache(): Promise<void> {
     await Promise.all([deleteRecord(EDIT_STORE), deleteRecord(VIDEO_STORE)]);
   } catch {
     // 忽略隐私模式下的清理失败。
-  }
-}
-
-/** 同步向后兼容别名：某些外部代码最早只写了 localStorage。 */
-export async function removeLegacyLocalStorageCache(): Promise<void> {
-  try {
-    window.localStorage.removeItem(WORKSPACE_KEY);
-  } catch {
-    // 忽略清理失败。
   }
 }

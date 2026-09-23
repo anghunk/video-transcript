@@ -2,9 +2,9 @@ import { Clapperboard, Download } from 'lucide-react';
 import type { ExportQuality } from '../types';
 
 const QUALITY_META: Array<{ value: ExportQuality; label: string; hint: string }> = [
-  { value: 'native', label: '接近原画', hint: '保持原始分辨率' },
-  { value: 'high', label: '高画质', hint: '限制在 4K' },
-  { value: 'standard', label: '标准', hint: '限制在 1080p' },
+  { value: 'native', label: '接近原画', hint: '保持原始分辨率并参考源码率' },
+  { value: 'high', label: '高画质', hint: '限制在 4K 并参考源码率' },
+  { value: 'standard', label: '标准', hint: '限制在 1080p 并参考源码率' },
 ];
 
 interface ExportPanelProps {

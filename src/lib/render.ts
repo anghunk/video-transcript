@@ -63,10 +63,6 @@ function drawSubtitleText(
   const totalHeight = lines.length * lineHeight + style.paddingY * 2 - (lineHeight - style.fontSize) * 0.35;
 
   const outerMargin = 24;
-  const styledWidth = Math.max(
-    outerMargin * 2,
-    width + 1,
-  );
 
   let y = 0;
   if (style.position === 'top') y = outerMargin;
@@ -75,8 +71,8 @@ function drawSubtitleText(
 
   let x = 0;
   if (style.align === 'left') x = outerMargin;
-  else if (style.align === 'center') x = (width - Math.min(maxWidth, contentWidth)) / 2;
-  else x = width - Math.min(maxWidth, contentWidth) - outerMargin;
+  else if (style.align === 'center') x = (width - contentWidth) / 2;
+  else x = width - contentWidth - outerMargin;
 
   // 背景宽度保证内容始终被包含，并只在必要时填充。
   const drawWidth = Math.min(maxWidth, Math.max(contentWidth, 8));
@@ -126,6 +122,11 @@ export function renderSubtitleOverlay(
       drawSubtitleText(context, segment, resolveStyle(segment, defaultStyle), options);
     }
   }
+}
+
+/** 判断当前时间点是否有字幕需要绘制，用于跳过无意义的画布重绘。 */
+export function hasActiveSubtitle(segments: SubtitleSegment[], time: number): boolean {
+  return segments.some((segment) => time >= segment.start && time < segment.end);
 }
 
 /** 当前时间点需要显示的字幕文本，用于列表高亮等非画布界面。 */

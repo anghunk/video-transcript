@@ -15,6 +15,7 @@ export interface SourceMediaInfo {
   width: number;
   height: number;
   frameRate: number;
+  videoBitrate: number;
   videoCodec: string;
   audioCodec: string;
   audioSampleRate: number;
@@ -57,6 +58,8 @@ interface RawMp4TrackDescription {
   codec?: string;
   timescale?: number;
   nb_samples?: number;
+  duration?: number;
+  bitrate?: number;
 }
 
 interface RawVisualSampleEntry {
@@ -346,6 +349,36 @@ function getTrackDescription(
     | undefined) ?? null;
 }
 
+/** 读取视频轨平均码率；缺少 btrt 信息时按样本总字节数和轨道时长估算。 */
+function getTrackBitrate(
+  file: ReturnType<typeof MP4Box.createFile>,
+  trackId: number,
+  fallbackDuration: number,
+): number {
+  const track = getTrackDescription(file, trackId);
+  const reportedBitrate = numericOr(track?.bitrate, 0);
+  if (reportedBitrate > 0) return reportedBitrate;
+
+  const trackDuration =
+    track?.duration && track.timescale
+      ? track.duration / track.timescale
+      : fallbackDuration;
+  if (!(trackDuration > 0)) return 0;
+
+  try {
+    const samples = file.getTrackSamplesInfo(trackId) as
+      | Array<{ size?: number }>
+      | undefined;
+    const totalBytes = (samples ?? []).reduce(
+      (sum, sample) => sum + numericOr(sample.size, 0),
+      0,
+    );
+    return totalBytes > 0 ? (totalBytes * 8) / trackDuration : 0;
+  } catch {
+    return 0;
+  }
+}
+
 function getAudioDescriptionBytes(entry: RawAudioSampleEntry): Uint8Array | null {
   const descriptor =
     entry.esds?.esd ??
@@ -458,6 +491,7 @@ export async function loadSourceMedia(
       }
     : null;
 
+  const duration = movie.duration / (movie.timescale || 1);
   const info: SourceMediaInfo = {
     name: file.name,
     size: file.size,
@@ -466,13 +500,16 @@ export async function loadSourceMedia(
     hasAudio: Boolean(audioTrack),
     videoTrackId: videoTrack?.id ?? null,
     audioTrackId: audioTrack?.id ?? null,
-    duration: movie.duration / (movie.timescale || 1),
+    duration,
     width: videoTrack?.video?.width ?? 0,
     height: videoTrack?.video?.height ?? 0,
     frameRate: videoTrack?.nb_samples && movie.duration
       ? (videoTrack.nb_samples * (videoTrack.timescale || movie.timescale)) /
         movie.duration
       : 30,
+    videoBitrate: videoTrack?.id
+      ? getTrackBitrate(boxFile, videoTrack.id, duration)
+      : 0,
     videoCodec: videoTrack?.codec ?? '',
     audioCodec: audioTrack?.codec ?? '',
     audioSampleRate: audioTrack?.audio?.sample_rate ?? 0,
