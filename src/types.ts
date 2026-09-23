@@ -39,3 +39,19 @@ export interface ExportEvents {
   onProgress?: (progress: number, phase: string) => void;
   onError?: (error: Error) => void;
 }
+
+export type ThemeMode = 'dark' | 'light';
+
+export interface CacheOffer {
+  fileName: string;
+  savedAt: string;
+}
+
+export interface DragState {
+  segmentId: string;
+  edge: 'start' | 'end' | 'body';
+  pointerStartX: number;
+  originalStart: number;
+  originalEnd: number;
+  snapTime: number | null;
+}

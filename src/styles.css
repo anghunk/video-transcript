@@ -273,7 +273,8 @@ button {
   font-size: 12px;
 }
 
-.upload-screen:has(.cache-banner) .upload-theme-toggle {
+.upload-screen:has(.cache-banner) .upload-theme-toggle,
+.upload-screen:has(.cache-banner) .upload-github-link {
   top: 78px;
 }
 
@@ -282,6 +283,14 @@ button {
   top: 24px;
   right: 28px;
   z-index: 3;
+}
+
+.upload-github-link {
+  position: absolute;
+  top: 24px;
+  right: 72px;
+  z-index: 3;
+  text-decoration: none;
 }
 
 .theme-toggle {
@@ -1704,7 +1713,8 @@ input[type="color"] {
     padding-inline: 20px;
   }
 
-  .upload-screen:has(.cache-banner) .upload-theme-toggle {
+  .upload-screen:has(.cache-banner) .upload-theme-toggle,
+  .upload-screen:has(.cache-banner) .upload-github-link {
     top: 70px;
   }
 
@@ -1718,6 +1728,11 @@ input[type="color"] {
   .upload-theme-toggle {
     top: 18px;
     right: 20px;
+  }
+
+  .upload-github-link {
+    top: 18px;
+    right: 64px;
   }
 
   .upload-heading {
@@ -1827,13 +1842,19 @@ input[type="color"] {
     max-width: none;
   }
 
-  .upload-screen:has(.cache-banner) .upload-theme-toggle {
+  .upload-screen:has(.cache-banner) .upload-theme-toggle,
+  .upload-screen:has(.cache-banner) .upload-github-link {
     top: 112px;
   }
 
   .upload-theme-toggle {
     top: 14px;
     right: 16px;
+  }
+
+  .upload-github-link {
+    top: 14px;
+    right: 60px;
   }
 
   .upload-heading {

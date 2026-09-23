@@ -5,19 +5,13 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import {
   List,
-  BadgeCheck,
-  Clapperboard,
-  Copy,
-  CloudOff,
   Download,
-  FileVideo,
-  LoaderCircle,
   LogOut,
-  MonitorUp,
   Moon,
   Palette,
   Pause,
@@ -25,26 +19,26 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
-  ShieldCheck,
   Sun,
-  Timer,
-  Trash2,
-  Upload,
-  X,
 } from 'lucide-react';
-import logoUrl from '../logo.png';
 import type {
+  CacheOffer,
+  DragState,
   ExportQuality,
-  SubtitleAlign,
-  SubtitlePosition,
   SubtitleSegment,
   SubtitleStyle,
+  ThemeMode,
 } from './types';
+import { ConfirmDialog } from './components/ConfirmDialog';
+import { ExportPanel } from './components/ExportPanel';
+import { SegmentList } from './components/SegmentList';
+import { StylePanel } from './components/StylePanel';
+import { Timeline } from './components/Timeline';
+import { UploadScreen } from './components/UploadScreen';
 import { DEFAULT_STYLE, renderSubtitleOverlay } from './lib/render';
 import { createSegmentId, clampSegment, sortSegments } from './lib/subtitles';
-import { formatBytes, formatClock, formatTimestamp, parseTimestamp } from './lib/format';
-import { loadSourceMedia, type SourceMediaRuntime } from './lib/media';
-import { exportSubtitleVideo } from './lib/export';
+import { formatBytes, formatClock } from './lib/format';
+import type { SourceMediaRuntime } from './lib/media';
 import {
   clearWorkspaceCache,
   hasWorkspaceCache,
@@ -55,87 +49,10 @@ import {
   type CachedWorkspace,
 } from './lib/storage';
 
-const QUALITY_META: Array<{ value: ExportQuality; label: string; hint: string }> = [
-  { value: 'native', label: '接近原画', hint: '保持原始分辨率' },
-  { value: 'high', label: '高画质', hint: '限制在 4K' },
-  { value: 'standard', label: '标准', hint: '限制在 1080p' },
-];
-
-const POSITION_META: Array<{ value: SubtitlePosition; label: string }> = [
-  { value: 'top', label: '顶部' },
-  { value: 'middle', label: '中间' },
-  { value: 'bottom', label: '底部' },
-];
-
-const ALIGN_META: Array<{ value: SubtitleAlign; label: string }> = [
-  { value: 'left', label: '左对齐' },
-  { value: 'center', label: '居中' },
-  { value: 'right', label: '右对齐' },
-];
-
-interface SubtitleStylePreset {
-  id: string;
-  label: string;
-  description: string;
-  style: SubtitleStyle;
-}
-
-const STYLE_PRESETS: SubtitleStylePreset[] = [
-  {
-    id: 'classic',
-    label: '经典',
-    description: '黑底白字',
-    style: { ...DEFAULT_STYLE },
-  },
-  {
-    id: 'cinema',
-    label: '电影',
-    description: '半透明黑底',
-    style: {
-      ...DEFAULT_STYLE,
-      backgroundColor: '#000000',
-      textColor: '#ffffff',
-      fontSize: 30,
-      backgroundOpacity: 0.7,
-    },
-  },
-  {
-    id: 'light',
-    label: '简洁',
-    description: '白底黑字',
-    style: {
-      ...DEFAULT_STYLE,
-      backgroundColor: '#ffffff',
-      textColor: '#111111',
-      backgroundOpacity: 1,
-    },
-  },
-  {
-    id: 'highlight',
-    label: '强调',
-    description: '黑底黄字',
-    style: {
-      ...DEFAULT_STYLE,
-      backgroundColor: '#000000',
-      textColor: '#ffd400',
-      fontSize: 32,
-      backgroundOpacity: 1,
-    },
-  },
-];
-
-interface DragState {
-  segmentId: string;
-  edge: 'start' | 'end' | 'body';
-  pointerStartX: number;
-  originalStart: number;
-  originalEnd: number;
-}
-
 type WorkspaceTab = 'subtitles' | 'style' | 'export';
-type ThemeMode = 'dark' | 'light';
 
 const THEME_STORAGE_KEY = 'subtitle-studio-theme';
+const TIMELINE_SNAP_THRESHOLD_PX = 8;
 
 function getInitialTheme(): ThemeMode {
   try {
@@ -143,6 +60,14 @@ function getInitialTheme(): ThemeMode {
   } catch {
     return 'dark';
   }
+}
+
+/** 判断键盘事件是否发生在可编辑控件中。 */
+function isEditableTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || target.matches('input, textarea, select'))
+  );
 }
 
 type ConfirmAction =
@@ -156,11 +81,6 @@ type ConfirmAction =
       onConfirm: () => void;
       onCancel: () => void;
     };
-
-interface CacheOffer {
-  fileName: string;
-  savedAt: string;
-}
 
 function App() {
   const [media, setMedia] = useState<SourceMediaRuntime | null>(null);
@@ -192,6 +112,7 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const workspacePanelRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const timelineSelectionTimeRef = useRef<number | null>(null);
   const timelineDragPropsRef = useRef<{
     onMove: (event: PointerEvent) => void;
     onUp: () => void;
@@ -414,6 +335,7 @@ function App() {
     setExporting(false);
     setExportProgress(0);
     try {
+      const { loadSourceMedia } = await import('./lib/media');
       const runtime = await loadSourceMedia(file);
       if (!runtime.videoTrack || !runtime.videoConfig) {
         throw new Error('未识别到可解码的视频轨道，请换用 H.264 编码的 MP4。');
@@ -423,6 +345,7 @@ function App() {
       setMedia(runtime);
       setMediaUrl(nextUrl);
       setCurrentTime(0);
+      timelineSelectionTimeRef.current = null;
       setDuration(runtime.info.duration);
       setSegments([]);
       setSelectedId(null);
@@ -440,7 +363,7 @@ function App() {
     }
   }
 
-  function handleDrop(event: React.DragEvent<HTMLDivElement>) {
+  function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
     event.preventDefault();
     const file = event.dataTransfer.files?.[0];
     if (file) void openFile(file);
@@ -460,15 +383,8 @@ function App() {
     if (video) video.currentTime = clamped;
   }
 
-  function handleAddSegment() {
+  function addSegmentAt(preferredStart: number) {
     if (!media) return;
-    const lastSegmentEnd = sortedSegments.reduce(
-      (max, segment) => Math.max(max, segment.end),
-      0,
-    );
-    const preferredStart = lastSegmentEnd > 0
-      ? lastSegmentEnd
-      : Math.min(currentTime, Math.max(0, duration - 0.08));
     const start = Math.min(preferredStart, Math.max(0, duration - 0.08));
     const { start: safeStart, end: safeEnd } = clampSegment(
       start,
@@ -484,6 +400,19 @@ function App() {
     setSegments((current) => sortSegments([...current, nextSegment]));
     setSelectedId(nextSegment.id);
     handleSeek(safeEnd);
+    timelineSelectionTimeRef.current = safeEnd;
+  }
+
+  function handleAddSegment() {
+    if (!media) return;
+    const lastSegmentEnd = sortedSegments.reduce(
+      (max, segment) => Math.max(max, segment.end),
+      0,
+    );
+    const preferredStart = timelineSelectionTimeRef.current !== null
+      ? timelineSelectionTimeRef.current
+      : selectedSegment?.end ?? (lastSegmentEnd > 0 ? lastSegmentEnd : currentTime);
+    addSegmentAt(preferredStart);
   }
 
   function handleCopySegment() {
@@ -510,6 +439,47 @@ function App() {
     setSegments((current) => current.filter((segment) => segment.id !== selectedId));
     setSelectedId(null);
   }
+
+  useEffect(() => {
+    function handleGlobalKeyDown(event: KeyboardEvent) {
+      if (!media || confirmAction || exporting || event.isComposing) return;
+
+      const hasCommandModifier = event.metaKey || event.ctrlKey;
+      if (
+        hasCommandModifier &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key === 'Enter'
+      ) {
+        if (event.repeat) return;
+        event.preventDefault();
+        handleAddSegment();
+        return;
+      }
+
+      if (
+        selectedId &&
+        !isEditableTarget(event.target) &&
+        (event.key === 'Delete' || event.key === 'Backspace')
+      ) {
+        event.preventDefault();
+        handleDeleteSegment();
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [
+    confirmAction,
+    currentTime,
+    defaultDuration,
+    duration,
+    exporting,
+    media,
+    selectedId,
+    selectedSegment,
+    sortedSegments,
+  ]);
 
   function updateSelectedSegment(patch: Partial<SubtitleSegment>) {
     if (!selectedId) return;
@@ -550,14 +520,18 @@ function App() {
     const trackElement = event.currentTarget;
     const rect = trackElement.getBoundingClientRect();
     const ratio = (event.clientX - rect.left) / Math.max(1, rect.width);
-    handleSeek(ratio * duration);
+    const targetTime = ratio * duration;
+    timelineSelectionTimeRef.current = targetTime;
+    handleSeek(targetTime);
     const updatePlayhead = (pointerEvent: PointerEvent) => {
       const box = trackElement.getBoundingClientRect();
       const nextRatio = Math.max(0, Math.min(1, (pointerEvent.clientX - box.left) / Math.max(1, box.width)));
       const video = videoRef.current;
+      const nextTime = nextRatio * duration;
+      timelineSelectionTimeRef.current = nextTime;
       if (video) {
-        video.currentTime = nextRatio * duration;
-        setCurrentTime(nextRatio * duration);
+        video.currentTime = nextTime;
+        setCurrentTime(nextTime);
       }
     };
     const finish = () => {
@@ -579,6 +553,7 @@ function App() {
     const rect = event.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
     const targetTime = ratio * duration;
+    timelineSelectionTimeRef.current = targetTime;
     setCurrentTime(targetTime);
     const video = videoRef.current;
     if (video) video.currentTime = targetTime;
@@ -596,6 +571,7 @@ function App() {
       pointerStartX: event.clientX,
       originalStart: segment.start,
       originalEnd: segment.end,
+      snapTime: timelineSelectionTimeRef.current,
     };
     const target = event.currentTarget as HTMLElement;
     target.setPointerCapture(event.pointerId);
@@ -608,21 +584,37 @@ function App() {
     if (!(track instanceof HTMLElement)) return;
     const rect = track.getBoundingClientRect();
     const deltaSeconds = ((event.clientX - drag.pointerStartX) / Math.max(1, rect.width)) * duration;
+    const snapThresholdSeconds = (TIMELINE_SNAP_THRESHOLD_PX / Math.max(1, rect.width)) * duration;
     const { originalStart, originalEnd, edge } = drag;
+    const snap = (value: number): number => {
+      if (drag.snapTime === null || Math.abs(value - drag.snapTime) > snapThresholdSeconds) {
+        return value;
+      }
+      return drag.snapTime;
+    };
 
     if (edge === 'start') {
-      const start = originalStart + deltaSeconds;
+      const start = snap(originalStart + deltaSeconds);
       updateSegmentById(drag.segmentId, {
         start: Math.max(0, Math.min(start, originalEnd - 0.08)),
       });
     } else if (edge === 'end') {
-      const end = originalEnd + deltaSeconds;
+      const end = snap(originalEnd + deltaSeconds);
       updateSegmentById(drag.segmentId, {
         end: Math.min(duration, Math.max(end, originalStart + 0.08)),
       });
     } else {
       const width = originalEnd - originalStart;
-      const start = Math.max(0, Math.min(duration - width, originalStart + deltaSeconds));
+      let start = Math.max(0, Math.min(duration - width, originalStart + deltaSeconds));
+      if (drag.snapTime !== null) {
+        const startDelta = drag.snapTime - start;
+        const endDelta = drag.snapTime - (start + width);
+        const nearestDelta =
+          Math.abs(startDelta) <= Math.abs(endDelta) ? startDelta : endDelta;
+        if (Math.abs(nearestDelta) <= snapThresholdSeconds) {
+          start = Math.max(0, Math.min(duration - width, start + nearestDelta));
+        }
+      }
       updateSegmentById(drag.segmentId, {
         start,
         end: start + width,
@@ -650,6 +642,7 @@ function App() {
     setExportPhase('正在准备编码');
     setError('');
     try {
+      const { exportSubtitleVideo } = await import('./lib/export');
       const blob = await exportSubtitleVideo({
         media,
         segments: sortedSegments,
@@ -682,6 +675,7 @@ function App() {
     setMedia(null);
     setMediaUrl('');
     setCurrentTime(0);
+    timelineSelectionTimeRef.current = null;
     setDuration(0);
     setPlaying(false);
     setSegments([]);
@@ -789,7 +783,7 @@ function App() {
                   <RotateCcw size={16} />
                 </button>
                 <span className="timecode">{formatClock(currentTime)} / {formatClock(duration)}</span>
-                <button type="button" className="control-button text-button" onClick={handleAddSegment} title="在末尾递增添加字幕">
+                <button type="button" className="control-button text-button" onClick={handleAddSegment} title="添加字幕（⌘/Ctrl + Enter）">
                   <Plus size={16} /> 添加字幕
                 </button>
               </div>
@@ -828,6 +822,7 @@ function App() {
               segments={sortedSegments}
               selectedId={selectedId}
               onSelectSegment={(id) => {
+                timelineSelectionTimeRef.current = null;
                 setSelectedId(id);
                 const segment = segments.find((item) => item.id === id);
                 if (segment) handleSeek(segment.start);
@@ -891,6 +886,7 @@ function App() {
                   currentTime={currentTime}
                   onAdd={handleAddSegment}
                   onSelect={(id) => {
+                    timelineSelectionTimeRef.current = null;
                     setSelectedId(id);
                     const segment = segments.find((item) => item.id === id);
                     if (segment) handleSeek(segment.start);
@@ -926,8 +922,6 @@ function App() {
                   selectedSegment={selectedSegment}
                   onChangeDefault={updateDefaultStyle}
                   onChangeSelected={updateSelectedStyle}
-                  onDelete={handleDeleteSegment}
-                  onCopy={handleCopySegment}
                   segmentsCount={segments.length}
                 />
               )}
@@ -987,726 +981,6 @@ function App() {
         />
       )}
     </main>
-  );
-}
-
-interface UploadScreenProps {
-  loading: boolean;
-  error: string;
-  waiting: boolean;
-  cacheOffer: CacheOffer | null;
-  restoring: boolean;
-  theme: ThemeMode;
-  onToggleTheme: () => void;
-  onSelect: () => void;
-  onRestore: () => void;
-  onDiscard: () => void;
-  onDrop: (event: React.DragEvent<HTMLDivElement>) => void;
-}
-
-function UploadScreen({
-  loading,
-  error,
-  waiting,
-  cacheOffer,
-  restoring,
-  theme,
-  onToggleTheme,
-  onSelect,
-  onRestore,
-  onDiscard,
-  onDrop,
-}: UploadScreenProps) {
-  const [dragActive, setDragActive] = useState(false);
-  const busy = loading || waiting;
-
-  return (
-    <div className="upload-screen">
-      <button
-        type="button"
-        className="theme-toggle upload-theme-toggle"
-        onClick={onToggleTheme}
-        title={theme === 'dark' ? '切换日间模式' : '切换黑夜模式'}
-        aria-label={theme === 'dark' ? '切换日间模式' : '切换黑夜模式'}
-      >
-        {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-      </button>
-
-      {cacheOffer && (
-        <div className="cache-banner" role="status" aria-live="polite">
-          <div className="cache-banner-inner">
-            <div className="cache-banner-status">
-              <span className="cache-banner-icon"><FileVideo size={17} /></span>
-              <div className="cache-banner-copy">
-                <strong>已找到上次的工作台缓存</strong>
-                <span>{cacheOffer.fileName} · {cacheOffer.savedAt}</span>
-              </div>
-            </div>
-            <div className="cache-banner-actions">
-              <button
-                type="button"
-                className="secondary-button cache-banner-button"
-                onClick={onDiscard}
-                disabled={restoring}
-              >
-                <Trash2 size={15} /> 放弃
-              </button>
-              <button
-                type="button"
-                className="primary-button cache-banner-button"
-                onClick={onRestore}
-                disabled={restoring}
-              >
-                {restoring ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}
-                {restoring ? '正在恢复' : '继续编辑'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="upload-page">
-        <section className="upload-story">
-          <div className="upload-brand">
-            <span className="upload-logo">
-              <img src={logoUrl} alt="" />
-            </span>
-            <span>字幕工作室</span>
-          </div>
-
-          <div className="upload-heading">
-            <span className="upload-eyebrow">本地视频字幕工作台</span>
-            <h1>把视频放进时间轴，让字幕准时出现。</h1>
-            <p>拖入一个 MP4 即可开始分段、调整样式和导出，全程只在当前浏览器处理。</p>
-          </div>
-
-          <div className="upload-preview" aria-hidden="true">
-            <div className="upload-preview-frame">
-              <span className="preview-playhead-dot" />
-              <span className="preview-subtitle">字幕会实时出现在这里</span>
-            </div>
-            <div className="upload-preview-timeline">
-              <span className="preview-playhead" />
-              <span className="preview-clip preview-clip-a" />
-              <span className="preview-clip preview-clip-b" />
-              <span className="preview-clip preview-clip-c" />
-            </div>
-          </div>
-        </section>
-
-        <section className="upload-panel" aria-label="视频上传">
-          <div className="upload-panel-heading">
-            <div>
-              <strong>新建字幕项目</strong>
-              <span>上传后直接进入工作台</span>
-            </div>
-            <span className="format-chip">MP4</span>
-          </div>
-
-          <div
-            className={`upload-zone${dragActive ? ' dragover' : ''}`}
-            aria-disabled={busy}
-            onClick={() => {
-              if (!busy) onSelect();
-            }}
-            onDragEnter={(event) => {
-              event.preventDefault();
-              if (!busy) setDragActive(true);
-            }}
-            onDragOver={(event) => {
-              if (!busy) event.preventDefault();
-            }}
-            onDragLeave={(event) => {
-              if (event.currentTarget === event.target) setDragActive(false);
-            }}
-            onDrop={(event) => {
-              setDragActive(false);
-              if (!busy) onDrop(event);
-            }}
-          >
-            <div className="upload-icon"><FileVideo size={30} strokeWidth={1.5} /></div>
-            <div className="upload-zone-copy">
-              <strong>{loading ? '正在解析视频' : waiting ? '正在检查本地缓存' : '把本地视频拉到工作台'}</strong>
-              <span>
-                {loading
-                  ? '正在读取本地视频，稍候即可开始编辑'
-                  : waiting
-                    ? '如果上次中断，稍后会询问是否恢复'
-                    : '或点击选择文件，仅支持本地 MP4'}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="primary-button upload-select"
-              disabled={busy}
-              onClick={(event) => {
-                event.stopPropagation();
-                if (!busy) onSelect();
-              }}
-            >
-              {busy ? <LoaderCircle className="spin" size={17} /> : <Upload size={16} />}
-              {loading ? '解析中' : waiting ? '检查中' : '选择本地视频'}
-            </button>
-          </div>
-
-          <div className="upload-trust">
-            <span><ShieldCheck size={14} /> 本地处理</span>
-            <span><MonitorUp size={14} /> 原分辨率</span>
-            <span><BadgeCheck size={14} /> 无水印</span>
-          </div>
-
-          <div className="upload-privacy">
-            <CloudOff size={15} />
-            <span>视频不会上传到服务器，关闭页面后可在缓存中恢复上次项目。</span>
-          </div>
-
-          {error && <div className="error-line upload-error" role="alert">{error}</div>}
-        </section>
-      </div>
-    </div>
-  );
-}
-
-interface ConfirmDialogProps {
-  title: string;
-  description: string;
-  confirmLabel: string;
-  cancelLabel: string;
-  confirmVariant?: 'default' | 'danger';
-  busy?: boolean;
-  busyLabel?: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-  onClose?: () => void;
-}
-
-function ConfirmDialog({
-  title,
-  description,
-  confirmLabel,
-  cancelLabel,
-  confirmVariant = 'default',
-  busy = false,
-  busyLabel = '处理中',
-  onConfirm,
-  onCancel,
-  onClose,
-}: ConfirmDialogProps) {
-  const handleClose = onClose ?? onCancel;
-
-  return (
-    <div className="confirm-backdrop" role="presentation" onMouseDown={handleClose}>
-      <div
-        className="confirm-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <button type="button" className="confirm-close" onClick={handleClose} aria-label="关闭" title="关闭">
-          <X size={16} />
-        </button>
-        <div className="confirm-icon"><Timer size={22} /></div>
-        <h2>{title}</h2>
-        <p>{description}</p>
-        <div className="confirm-actions">
-          <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>{cancelLabel}</button>
-          <button
-            type="button"
-            className={`primary-button${confirmVariant === 'danger' ? ' danger' : ''}`}
-            onClick={onConfirm}
-            disabled={busy}
-          >
-            {busy && <LoaderCircle className="spin" size={16} />}
-            {busy ? busyLabel : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface TimelineProps {
-  duration: number;
-  currentTime: number;
-  segments: SubtitleSegment[];
-  selectedId: string | null;
-  onTrackPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
-  onTrackPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void;
-  onSelectSegment: (id: string) => void;
-  onBarPointerDown: (
-    event: ReactPointerEvent<HTMLElement>,
-    segment: SubtitleSegment,
-    edge: DragState['edge'],
-  ) => void;
-  onBarPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;
-  onBarPointerUp: (event: ReactPointerEvent<HTMLElement>) => void;
-}
-
-function Timeline({
-  duration,
-  currentTime,
-  segments,
-  selectedId,
-  onTrackPointerDown,
-  onTrackPointerMove,
-  onSelectSegment,
-  onBarPointerDown,
-  onBarPointerMove,
-  onBarPointerUp,
-}: TimelineProps) {
-  const safeDuration = duration || 1;
-  return (
-    <div className="timeline">
-      <div className="timeline-scroll">
-        <div
-          className="timeline-track"
-          onPointerDown={onTrackPointerDown}
-          onPointerMove={onTrackPointerMove}
-        >
-          <div className="timeline-rule">
-            {Array.from({ length: 9 }, (_, index) => {
-              const value = (safeDuration / 8) * index;
-              return (
-                <span key={index} style={{ left: `${(value / safeDuration) * 100}%` }}>
-                  {formatTimestamp(value, false)}
-                </span>
-              );
-            })}
-          </div>
-          <div className="segment-layer">
-            {segments.map((segment) => (
-              <button
-                type="button"
-                key={segment.id}
-                className={`segment-bar${selectedId === segment.id ? ' selected' : ''}`}
-                style={{
-                  left: `${(segment.start / safeDuration) * 100}%`,
-                  width: `${((segment.end - segment.start) / safeDuration) * 100}%`,
-                }}
-                data-segment-id={segment.id}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSelectSegment(segment.id);
-                }}
-                onPointerDown={(event) => onBarPointerDown(event, segment, 'body')}
-                onPointerMove={onBarPointerMove}
-                onPointerUp={onBarPointerUp}
-                title={segment.text}
-              >
-                <span className="segment-label">{segment.text || '空白'}</span>
-                <span
-                  className="segment-handle start-handle"
-                  onPointerDown={(event) => onBarPointerDown(event, segment, 'start')}
-                  onPointerMove={onBarPointerMove}
-                  onPointerUp={onBarPointerUp}
-                  onClick={(event) => event.stopPropagation()}
-                />
-                <span
-                  className="segment-handle end-handle"
-                  onPointerDown={(event) => onBarPointerDown(event, segment, 'end')}
-                  onPointerMove={onBarPointerMove}
-                  onPointerUp={onBarPointerUp}
-                  onClick={(event) => event.stopPropagation()}
-                />
-              </button>
-            ))}
-          </div>
-          <div className="playhead" style={{ left: `${(currentTime / safeDuration) * 100}%` }}>
-            <span className="playhead-dot" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface SegmentListProps {
-  segments: SubtitleSegment[];
-  selectedId: string | null;
-  currentTime: number;
-  defaultDuration: number;
-  onAdd: () => void;
-  onSelect: (id: string) => void;
-  onChangeText: (id: string, text: string) => void;
-  onChangeStart: (id: string, start: number) => void;
-  onChangeEnd: (id: string, end: number) => void;
-  onCopy: (id: string) => void;
-  onDelete: (id: string) => void;
-  onChangeDefaultDuration: (value: number) => void;
-}
-
-function SegmentList({
-  segments,
-  selectedId,
-  currentTime,
-  defaultDuration,
-  onAdd,
-  onSelect,
-  onChangeText,
-  onChangeStart,
-  onChangeEnd,
-  onCopy,
-  onDelete,
-  onChangeDefaultDuration,
-}: SegmentListProps) {
-  const addZoneRef = useRef<HTMLButtonElement | null>(null);
-  const previousCountRef = useRef(segments.length);
-
-  useLayoutEffect(() => {
-    if (segments.length > previousCountRef.current) {
-      addZoneRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    }
-    previousCountRef.current = segments.length;
-  }, [segments.length]);
-
-  const parseListTime = (raw: string, fallback: number): number => {
-    const parsed = parseTimestamp(raw);
-    return parsed ?? fallback;
-  };
-  return (
-    <div className="segment-list">
-      <div className="segment-settings">
-        <span>默认时长</span>
-        <label className="inline-setting">
-          <input
-            type="number"
-            min="1"
-            step="1"
-            aria-label="字幕默认时长"
-            value={defaultDuration}
-            onChange={(event) => onChangeDefaultDuration(Math.max(1, Math.round(Number(event.target.value) || 1)))}
-          />
-          <span>秒</span>
-        </label>
-      </div>
-      {segments.length > 0 && (
-        <div className="segment-rows">
-          {segments.map((segment) => (
-            <div
-              key={segment.id}
-              className={`segment-row${selectedId === segment.id ? ' selected' : ''}${
-                currentTime >= segment.start && currentTime < segment.end ? ' active' : ''
-              }`}
-              onClick={() => onSelect(segment.id)}
-            >
-              <div className="segment-row-top">
-                <input
-                  className="time-input start-input"
-                  type="text"
-                  inputMode="numeric"
-                  aria-label="字幕开始时间"
-                  value={formatTimestamp(segment.start, false)}
-                  onChange={(event) => onChangeStart(segment.id, parseListTime(event.target.value, segment.start))}
-                  onClick={(event) => event.stopPropagation()}
-                />
-                <span className="time-unit">秒</span>
-                <span className="time-separator">→</span>
-                <input
-                  className="time-input end-input"
-                  type="text"
-                  inputMode="numeric"
-                  aria-label="字幕结束时间"
-                  value={formatTimestamp(segment.end, false)}
-                  onChange={(event) => onChangeEnd(segment.id, parseListTime(event.target.value, segment.end))}
-                  onClick={(event) => event.stopPropagation()}
-                />
-                <span className="time-unit">秒</span>
-              </div>
-              <textarea
-                className="text-input"
-                rows={2}
-                aria-label="字幕文字"
-                value={segment.text}
-                placeholder="输入字幕"
-                onChange={(event) => onChangeText(segment.id, event.target.value)}
-                onClick={(event) => event.stopPropagation()}
-              />
-              <div className="row-actions">
-                <button type="button" className="mini-button" onClick={(event) => { event.stopPropagation(); onCopy(segment.id); }} title="复制">
-                  <Copy size={15} />
-                </button>
-                <button type="button" className="mini-button danger" onClick={(event) => { event.stopPropagation(); onDelete(segment.id); }} title="删除">
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <button
-        ref={addZoneRef}
-        type="button"
-        className="segment-add-zone"
-        onClick={onAdd}
-        title="添加字幕段"
-      >
-        <span className="segment-add-icon"><Plus size={17} /></span>
-        <span>{segments.length === 0 ? '添加第一条字幕段' : '添加字幕段'}</span>
-      </button>
-    </div>
-  );
-}
-
-interface StylePanelProps {
-  defaultStyle: SubtitleStyle;
-  selectedSegment: SubtitleSegment | null;
-  onChangeDefault: (patch: Partial<SubtitleStyle>) => void;
-  onChangeSelected: (patch: Partial<SubtitleStyle>) => void;
-  onCopy: () => void;
-  onDelete: () => void;
-  segmentsCount: number;
-}
-
-function StylePanel({
-  defaultStyle,
-  selectedSegment,
-  onChangeDefault,
-  onChangeSelected,
-  onCopy,
-  onDelete,
-  segmentsCount,
-}: StylePanelProps) {
-  const editingSegment = Boolean(selectedSegment);
-  const style = selectedSegment?.style
-    ? { ...DEFAULT_STYLE, ...defaultStyle, ...selectedSegment.style }
-    : { ...DEFAULT_STYLE, ...defaultStyle };
-  const onChange = editingSegment ? onChangeSelected : onChangeDefault;
-  const activePresetId = STYLE_PRESETS.find((preset) =>
-    Object.entries(preset.style).every(
-      ([key, value]) => style[key as keyof SubtitleStyle] === value,
-    ),
-  )?.id;
-
-  return (
-    <div className="edit-block">
-      <div className="block-heading">
-        <div>
-          <h3>字幕样式</h3>
-          <p>{editingSegment ? '仅修改当前段落' : '全局默认样式'}</p>
-        </div>
-        {editingSegment && (
-          <span className="override-chip">段落覆盖</span>
-        )}
-      </div>
-
-      <div className="style-presets">
-        <span className="field-label">预设样式</span>
-        <div className="preset-grid">
-          {STYLE_PRESETS.map((preset) => (
-            <button
-              type="button"
-              key={preset.id}
-              className={`preset-button${activePresetId === preset.id ? ' active' : ''}`}
-              aria-pressed={activePresetId === preset.id}
-              onClick={() => onChange(preset.style)}
-            >
-              <span className="preset-preview" aria-hidden="true">
-                <span
-                  className="preset-preview-bg"
-                  style={{
-                    backgroundColor: preset.style.backgroundColor,
-                    opacity: preset.style.backgroundOpacity,
-                  }}
-                />
-                <span
-                  className="preset-preview-text"
-                  style={{ color: preset.style.textColor }}
-                >
-                  字幕
-                </span>
-              </span>
-              <span className="preset-copy">
-                <strong>{preset.label}</strong>
-                <span>{preset.description}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <label className="field-row">
-        <span>背景色</span>
-        <span className="color-field">
-          <input
-            type="color"
-            value={style.backgroundColor}
-            onChange={(event) => onChange({ backgroundColor: event.target.value })}
-          />
-          <span className="mono-chip">{style.backgroundColor}</span>
-        </span>
-      </label>
-      <label className="field-row">
-        <span>文字色</span>
-        <span className="color-field">
-          <input
-            type="color"
-            value={style.textColor}
-            onChange={(event) => onChange({ textColor: event.target.value })}
-          />
-          <span className="mono-chip">{style.textColor}</span>
-        </span>
-      </label>
-      <label className="field-row">
-        <span>字号</span>
-        <input
-          className="range-input"
-          type="range"
-          min="18"
-          max="96"
-          step="1"
-          value={style.fontSize}
-          onChange={(event) => onChange({ fontSize: Number(event.target.value) })}
-        />
-        <span className="mono-chip">{style.fontSize}px</span>
-      </label>
-      <div className="field-row">
-        <span>不透明度</span>
-        <input
-          className="range-input"
-          type="range"
-          min="0"
-          max="1"
-          step="0.05"
-          value={style.backgroundOpacity}
-          onChange={(event) => onChange({ backgroundOpacity: Number(event.target.value) })}
-        />
-        <span className="mono-chip">{Math.round(style.backgroundOpacity * 100)}%</span>
-      </div>
-
-      <SegmentedControl
-        label="位置"
-        value={style.position}
-        options={POSITION_META}
-        onChange={(value) => onChange({ position: value as SubtitlePosition })}
-      />
-      <SegmentedControl
-        label="对齐"
-        value={style.align}
-        options={ALIGN_META}
-        onChange={(value) => onChange({ align: value as SubtitleAlign })}
-      />
-
-      {editingSegment && (
-        <div className="block-actions">
-          <button type="button" className="secondary-button" onClick={onCopy}>
-            <Copy size={16} /> 复制段落
-          </button>
-          <button type="button" className="secondary-button danger-text" onClick={onDelete}>
-            <Trash2 size={16} /> 删除段落
-          </button>
-        </div>
-      )}
-      {segmentsCount > 0 && !editingSegment && (
-        <p className="hint-text">选择右侧面板或时间轴中的段落，即可为它单独设置样式。</p>
-      )}
-    </div>
-  );
-}
-
-interface SegmentedControlProps<T extends string> {
-  label: string;
-  value: T;
-  options: Array<{ value: T; label: string }>;
-  onChange: (value: T) => void;
-}
-
-function SegmentedControl<T extends string>({ label, value, options, onChange }: SegmentedControlProps<T>) {
-  return (
-    <div className="field-block">
-      <span className="field-label">{label}</span>
-      <div className="segmented">
-        {options.map((option) => (
-          <button
-            type="button"
-            key={option.value}
-            className={value === option.value ? 'active' : ''}
-            onClick={() => onChange(option.value)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-interface ExportPanelProps {
-  quality: ExportQuality;
-  includeAudio: boolean;
-  exporting: boolean;
-  progress: number;
-  phase: string;
-  segmentsCount: number;
-  error: string;
-  onQualityChange: (value: ExportQuality) => void;
-  onIncludeAudioChange: (value: boolean) => void;
-  onExport: () => void;
-}
-
-function ExportPanel({
-  quality,
-  includeAudio,
-  exporting,
-  progress,
-  phase,
-  segmentsCount,
-  error,
-  onQualityChange,
-  onIncludeAudioChange,
-  onExport,
-}: ExportPanelProps) {
-  const qualityHint = QUALITY_META.find((item) => item.value === quality)?.hint ?? '';
-  return (
-    <div className="edit-block export-block">
-      <div className="block-heading">
-        <div>
-          <h3>导出</h3>
-          <p>{qualityHint}</p>
-        </div>
-        <Clapperboard size={18} />
-      </div>
-
-      <label className="field-row select-row">
-        <span>画质</span>
-        <select value={quality} onChange={(event) => onQualityChange(event.target.value as ExportQuality)}>
-          {QUALITY_META.map((item) => (
-            <option key={item.value} value={item.value}>{item.label}</option>
-          ))}
-        </select>
-      </label>
-
-      <label className="check-row">
-        <input
-          type="checkbox"
-          checked={includeAudio}
-          onChange={(event) => onIncludeAudioChange(event.target.checked)}
-        />
-        <span>保留原音轨（AAC 将直接封装）</span>
-      </label>
-
-      {exporting ? (
-        <div className="export-progress">
-          <div className="progress-track"><span style={{ width: `${Math.round(progress * 100)}%` }} /></div>
-          <div className="progress-copy">
-            <span>{phase}</span>
-            <span className="mono-chip">{Math.round(progress * 100)}%</span>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          className="primary-button export-button"
-          onClick={onExport}
-          disabled={segmentsCount === 0}
-        >
-          <Download size={17} />
-          导出 MP4
-        </button>
-      )}
-
-      {error && <div className="error-line" role="alert">{error}</div>}
-    </div>
   );
 }
 
