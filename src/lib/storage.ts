@@ -1,7 +1,7 @@
 import type { ExportQuality, SubtitleSegment, SubtitleStyle } from '../types';
 
-const WORKSPACE_KEY = 'subtitle-studio-workspace';
-const DB_NAME = 'subtitle-studio';
+const WORKSPACE_KEY = 'video-transcript-workspace';
+const DB_NAME = 'video-transcript';
 const DB_VERSION = 1;
 const EDIT_STORE = 'edits';
 const VIDEO_STORE = 'video';

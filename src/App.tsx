@@ -50,7 +50,7 @@ import {
 
 type WorkspaceTab = 'subtitles' | 'style' | 'export';
 
-const THEME_STORAGE_KEY = 'subtitle-studio-theme';
+const THEME_STORAGE_KEY = 'video-transcript-theme';
 const TIMELINE_SNAP_THRESHOLD_PX = 8;
 
 function getInitialTheme(): ThemeMode {
