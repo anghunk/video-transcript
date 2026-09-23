@@ -1,4 +1,4 @@
-import { useState, type DragEvent as ReactDragEvent } from 'react';
+import { useRef, useState, type DragEvent as ReactDragEvent } from 'react';
 import {
   FileVideo,
   Github,
@@ -47,10 +47,26 @@ export function UploadScreen({
   onDrop,
 }: UploadScreenProps) {
   const [dragActive, setDragActive] = useState(false);
+  const screenRef = useRef<HTMLDivElement>(null);
   const busy = loading || restoring;
 
   return (
-    <div className="upload-screen">
+    <div
+      ref={screenRef}
+      className="upload-screen"
+      onPointerMove={(event) => {
+        if (event.pointerType !== 'mouse') return;
+        const screen = screenRef.current;
+        if (!screen) return;
+        screen.style.setProperty('--grid-focus-x', `${event.clientX}px`);
+        screen.style.setProperty('--grid-focus-y', `${event.clientY}px`);
+        screen.style.setProperty('--grid-focus-opacity', '1');
+      }}
+      onPointerLeave={() => {
+        screenRef.current?.style.setProperty('--grid-focus-opacity', '0');
+      }}
+    >
+      <div className="grid-cursor-focus" aria-hidden="true" />
       <ParticleField theme={theme} />
 
       {cacheOffer && (

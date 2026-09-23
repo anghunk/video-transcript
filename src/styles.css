@@ -2873,8 +2873,80 @@ input[type="color"] {
 
 /* Landing page refinement */
 .upload-screen {
+  --grid-focus-x: 50%;
+  --grid-focus-y: 50%;
+  --grid-focus-opacity: 0;
   padding: 0 28px;
   background-size: 52px 52px;
+}
+
+.grid-cursor-focus {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--landing-accent) 34%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--landing-accent) 34%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 52px 52px;
+  opacity: var(--grid-focus-opacity);
+  mix-blend-mode: screen;
+  will-change: opacity;
+  -webkit-mask-image: radial-gradient(
+    circle 220px at var(--grid-focus-x) var(--grid-focus-y),
+    #000 0%,
+    rgba(0, 0, 0, 0.68) 24%,
+    rgba(0, 0, 0, 0.24) 58%,
+    transparent 100%
+  );
+  mask-image: radial-gradient(
+    circle 220px at var(--grid-focus-x) var(--grid-focus-y),
+    #000 0%,
+    rgba(0, 0, 0, 0.68) 24%,
+    rgba(0, 0, 0, 0.24) 58%,
+    transparent 100%
+  );
+  transition: opacity 240ms ease;
+}
+
+:root[data-theme="light"] .grid-cursor-focus {
+  mix-blend-mode: multiply;
+}
+
+.upload-screen::before {
+  content: "";
+  position: fixed;
+  top: -30%;
+  left: -90%;
+  z-index: 0;
+  width: 190vw;
+  height: 160vh;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 42%,
+    color-mix(in srgb, var(--landing-accent) 8%, transparent) 47%,
+    color-mix(in srgb, var(--landing-accent) 28%, transparent) 50%,
+    color-mix(in srgb, var(--landing-accent) 8%, transparent) 53%,
+    transparent 58%
+  );
+  filter: blur(1px);
+  mix-blend-mode: screen;
+  opacity: 0;
+  transform: translate3d(0, 0, 0) rotate(-6deg);
+  will-change: transform, opacity;
+  animation: grid-light-sweep 13s 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+:root[data-theme="light"] .upload-screen::before {
+  mix-blend-mode: multiply;
 }
 
 .upload-screen > main,
@@ -3212,6 +3284,26 @@ input[type="color"] {
   }
 }
 
+@keyframes grid-light-sweep {
+  0%,
+  72% {
+    opacity: 0;
+    transform: translate3d(-44%, 0, 0) rotate(-6deg);
+  }
+  76% {
+    opacity: 0.62;
+  }
+  87% {
+    opacity: 0.42;
+    transform: translate3d(44%, 0, 0) rotate(-6deg);
+  }
+  92%,
+  100% {
+    opacity: 0;
+    transform: translate3d(96%, 0, 0) rotate(-6deg);
+  }
+}
+
 @media (max-width: 900px) {
   .landing-hero {
     min-height: 0;
@@ -3451,5 +3543,13 @@ input[type="color"] {
   .landing-scroll-line::after,
   .cache-banner {
     animation: none;
+  }
+
+  .upload-screen::before {
+    display: none;
+  }
+
+  .grid-cursor-focus {
+    display: none;
   }
 }
