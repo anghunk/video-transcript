@@ -126,19 +126,11 @@ interface RawAudioSampleEntry {
   getChannelCount?: () => number;
   type?: string;
   esds?: {
-    esd?: {
-      getOTI?: () => number;
-      getAudioConfig?: () => number;
-      findDescriptor?: (tag: number) => { data?: Uint8Array } | undefined;
-    };
+    esd?: RawAudioDescriptor;
   };
   wave?: {
     esds?: {
-      esd?: {
-        getOTI?: () => number;
-        getAudioConfig?: () => number;
-        findDescriptor?: (tag: number) => { data?: Uint8Array } | undefined;
-      };
+      esd?: RawAudioDescriptor;
     };
   };
   dOps?: {
@@ -149,7 +141,15 @@ interface RawAudioSampleEntry {
 }
 
 interface RawAudioSpecificData {
+  tag?: number;
   data?: Uint8Array;
+  descs?: RawAudioSpecificData[];
+}
+
+interface RawAudioDescriptor extends RawAudioSpecificData {
+  getOTI?: () => number;
+  getAudioConfig?: () => number;
+  findDescriptor?: (tag: number) => RawAudioSpecificData | undefined;
 }
 
 function asFileBuffer(buffer: ArrayBuffer, fileStart = 0): MP4BoxBuffer {
@@ -351,9 +351,14 @@ function getAudioDescriptionBytes(entry: RawAudioSampleEntry): Uint8Array | null
     entry.esds?.esd ??
     entry.wave?.esds?.esd ??
     null;
-  if (!descriptor?.findDescriptor) return null;
-  const decoderConfig = (descriptor.findDescriptor as (tag: number) => RawAudioSpecificData | undefined)(4);
-  const specificInfo = descriptor.findDescriptor?.(5);
+  if (!descriptor) return null;
+  const decoderConfig =
+    descriptor.findDescriptor?.(4) ??
+    findAudioDescriptor(descriptor, 4);
+  const specificInfo =
+    findAudioDescriptor(decoderConfig, 5) ??
+    descriptor.findDescriptor?.(5) ??
+    findAudioDescriptor(descriptor, 5);
   if (
     specificInfo?.data &&
     specificInfo.data.byteLength > 0 &&
@@ -366,6 +371,20 @@ function getAudioDescriptionBytes(entry: RawAudioSampleEntry): Uint8Array | null
   return null;
 }
 
+/** 递归查找 ESDS 描述符；AAC 配置通常位于 DecoderConfigDescriptor 的子节点。 */
+function findAudioDescriptor(
+  descriptor: RawAudioSpecificData | null | undefined,
+  tag: number,
+): RawAudioSpecificData | undefined {
+  if (!descriptor) return undefined;
+  if (descriptor.tag === tag) return descriptor;
+  for (const child of descriptor.descs ?? []) {
+    const found = findAudioDescriptor(child, tag);
+    if (found) return found;
+  }
+  return undefined;
+}
+
 function areAudioSpecificBytesPlausible(data: Uint8Array): boolean {
   if (data.byteLength < 2) return false;
   const objectType = (data[0] & 0xf8) >> 3;
@@ -375,10 +394,10 @@ function areAudioSpecificBytesPlausible(data: Uint8Array): boolean {
 
 function codecFamilyFor(codec: string): CopiedAudioInfo['codecFamily'] {
   const normalized = codec.toLowerCase();
-  if (normalized.startsWith('mp4a.6b') || normalized.startsWith('aac')) {
+  if (normalized.startsWith('mp4a.40') || normalized.startsWith('aac')) {
     return 'aac';
   }
-  if (normalized.startsWith('opus') || normalized.startsWith('Opus')) {
+  if (normalized.startsWith('opus')) {
     return 'opus';
   }
   return 'other';
