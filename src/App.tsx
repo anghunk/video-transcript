@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useCallback,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -14,6 +15,7 @@ import {
   House,
   List,
   LoaderCircle,
+  Maximize2,
   Moon,
   Palette,
   Pause,
@@ -32,6 +34,7 @@ import type {
 } from './types';
 import { AsrPanel } from './components/AsrPanel';
 import { ExportPanel } from './components/ExportPanel';
+import { FullscreenPreview } from './components/FullscreenPreview';
 import { SegmentList } from './components/SegmentList';
 import { StylePanel } from './components/StylePanel';
 import { Timeline } from './components/Timeline';
@@ -97,6 +100,7 @@ function App() {
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [cacheOffer, setCacheOffer] = useState<CacheOffer | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [fullscreenPreviewOpen, setFullscreenPreviewOpen] = useState(false);
 
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
@@ -436,6 +440,25 @@ function App() {
     setCurrentTime(0);
   }
 
+  const handleFullscreenPreviewTimeChange = useCallback((time: number) => {
+    setCurrentTime(time);
+  }, []);
+
+  const handleCloseFullscreenPreview = useCallback((time: number) => {
+    setFullscreenPreviewOpen(false);
+    setCurrentTime(time);
+    const video = videoRef.current;
+    if (!video) return;
+    video.pause();
+    video.currentTime = time;
+    setPlaying(false);
+  }, []);
+
+  function openFullscreenPreview() {
+    videoRef.current?.pause();
+    setFullscreenPreviewOpen(true);
+  }
+
   function handleSeek(time: number) {
     const clamped = Math.max(0, Math.min(time, duration || 0));
     setCurrentTime(clamped);
@@ -496,7 +519,7 @@ function App() {
 
   useEffect(() => {
     function handleGlobalKeyDown(event: KeyboardEvent) {
-      if (!media || exporting || event.isComposing) return;
+      if (!media || exporting || fullscreenPreviewOpen || event.isComposing) return;
 
       const hasCommandModifier = event.metaKey || event.ctrlKey;
       if (
@@ -528,6 +551,7 @@ function App() {
     defaultDuration,
     duration,
     exporting,
+    fullscreenPreviewOpen,
     media,
     selectedId,
     selectedSegment,
@@ -789,7 +813,7 @@ function App() {
                 style={{
                   aspectRatio: String(videoAspectRatio),
                   // 视频预览按视口高度留出空间，避免挤占下方时间轴。
-                  maxWidth: `${videoAspectRatio * 52}vh`,
+                  maxWidth: `${videoAspectRatio * 58}vh`,
                 }}
               >
                 <video
@@ -826,8 +850,18 @@ function App() {
                 <button type="button" className="control-button" onClick={handleResetPlayback} title="重置播放" aria-label="重置播放">
                   <RotateCcw size={16} />
                 </button>
+                <button
+                  type="button"
+                  className="control-button text-button preview-button"
+                  onClick={openFullscreenPreview}
+                  title="全屏预览"
+                  aria-label="全屏预览视频"
+                >
+                  <Maximize2 size={16} />
+                  <span>预览</span>
+                </button>
                 <span className="timecode">{formatClock(currentTime)} / {formatClock(duration)}</span>
-                <button type="button" className="control-button text-button" onClick={handleAddSegment} title="添加字幕（⌘/Ctrl + Enter）">
+                <button type="button" className="control-button text-button add-subtitle-button" onClick={handleAddSegment} title="添加字幕（⌘/Ctrl + Enter）">
                   <span>添加字幕</span>
                   <kbd className="shortcut-hint">⌘/Ctrl + Enter</kbd>
                 </button>
@@ -977,6 +1011,21 @@ function App() {
           <strong>{restoring ? '正在恢复上次项目' : '正在打开工作台'}</strong>
           <span>正在从本地缓存读取视频和字幕进度，请稍候。</span>
         </div>
+      )}
+
+      {fullscreenPreviewOpen && media && (
+        <FullscreenPreview
+          src={mediaUrl}
+          initialTime={currentTime}
+          duration={duration}
+          width={media.info.width}
+          height={media.info.height}
+          aspectRatio={videoAspectRatio}
+          segments={sortedSegments}
+          defaultStyle={defaultStyle}
+          onTimeChange={handleFullscreenPreviewTimeChange}
+          onClose={handleCloseFullscreenPreview}
+        />
       )}
 
       <input
