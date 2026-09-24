@@ -1,10 +1,11 @@
 import { Clapperboard, Download } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { ExportQuality } from '../types';
 
-const QUALITY_META: Array<{ value: ExportQuality; label: string; hint: string }> = [
-  { value: 'native', label: '接近原画', hint: '保持原始分辨率并参考源码率' },
-  { value: 'high', label: '高画质', hint: '限制在 4K 并参考源码率' },
-  { value: 'standard', label: '标准', hint: '限制在 1080p 并参考源码率' },
+const QUALITY_META: Array<{ value: ExportQuality; labelKey: string; hintKey: string }> = [
+  { value: 'native', labelKey: 'export.qualities.native.label', hintKey: 'export.qualities.native.hint' },
+  { value: 'high', labelKey: 'export.qualities.high.label', hintKey: 'export.qualities.high.hint' },
+  { value: 'standard', labelKey: 'export.qualities.standard.label', hintKey: 'export.qualities.standard.hint' },
 ];
 
 interface ExportPanelProps {
@@ -32,22 +33,24 @@ export function ExportPanel({
   onIncludeAudioChange,
   onExport,
 }: ExportPanelProps) {
-  const qualityHint = QUALITY_META.find((item) => item.value === quality)?.hint ?? '';
+  const { t } = useTranslation();
+  const qualityHintKey = QUALITY_META.find((item) => item.value === quality)?.hintKey;
+  const qualityHint = qualityHintKey ? t(qualityHintKey) : '';
   return (
     <div className="edit-block export-block">
       <div className="block-heading">
         <div>
-          <h3>导出</h3>
+          <h3>{t('export.title')}</h3>
           <p>{qualityHint}</p>
         </div>
         <Clapperboard size={18} />
       </div>
 
       <label className="field-row select-row">
-        <span>画质</span>
+        <span>{t('export.quality')}</span>
         <select value={quality} onChange={(event) => onQualityChange(event.target.value as ExportQuality)}>
           {QUALITY_META.map((item) => (
-            <option key={item.value} value={item.value}>{item.label}</option>
+            <option key={item.value} value={item.value}>{t(item.labelKey)}</option>
           ))}
         </select>
       </label>
@@ -58,14 +61,14 @@ export function ExportPanel({
           checked={includeAudio}
           onChange={(event) => onIncludeAudioChange(event.target.checked)}
         />
-        <span>保留原音轨（AAC 将直接封装）</span>
+        <span>{t('export.keepAudio')}</span>
       </label>
 
       {exporting ? (
         <div className="export-progress">
           <div className="progress-track"><span style={{ width: `${Math.round(progress * 100)}%` }} /></div>
           <div className="progress-copy">
-            <span>{phase}</span>
+            <span>{phase ? t(phase) : ''}</span>
             <span className="mono-chip">{Math.round(progress * 100)}%</span>
           </div>
         </div>
@@ -77,7 +80,7 @@ export function ExportPanel({
           disabled={segmentsCount === 0}
         >
           <Download size={17} />
-          导出 MP4
+          {t('export.button')}
         </button>
       )}
 

@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import * as MP4Box from 'mp4box';
 import { MP4BoxBuffer } from 'mp4box';
 
@@ -450,7 +451,9 @@ export async function loadSourceMedia(
   const movie = await new Promise<MP4Box.Movie>((resolve, reject) => {
     boxFile.onReady = (ready) => resolve(ready);
     boxFile.onError = (module, message) =>
-      reject(new Error(`源文件解析失败：${module ?? ''} ${message ?? ''}`.trim()));
+      reject(new Error(i18n.t('errors.sourceParseFailed', {
+        details: `${module ?? ''} ${message ?? ''}`.trim(),
+      })));
     boxFile.appendBuffer(asFileBuffer(buffer));
     boxFile.flush();
   });
@@ -544,7 +547,9 @@ export async function extractTrackSamples(
 
   await new Promise<void>((resolve, reject) => {
     file.onError = (module, message) =>
-      reject(new Error(`音频样本提取失败：${module ?? ''} ${message ?? ''}`.trim()));
+      reject(new Error(i18n.t('errors.audioSampleExtractionFailed', {
+        details: `${module ?? ''} ${message ?? ''}`.trim(),
+      })));
     file.onSamples = (_id, _user, samples) => {
       const sourceSamples = samples as unknown as Array<{
         number: number;

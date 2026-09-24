@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CircleStop, LoaderCircle, Sparkles } from 'lucide-react';
 import type { SubtitleSegment } from '../types';
 import type { SourceMediaRuntime } from '../lib/media';
@@ -30,13 +31,8 @@ interface AsrOutcome {
   elapsedMs: number;
 }
 
-function formatSeconds(milliseconds: number): string {
-  const seconds = Math.round(milliseconds / 1000);
-  if (seconds < 60) return `${seconds} 秒`;
-  return `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`;
-}
-
 export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelProps) {
+  const { t } = useTranslation();
   const webGpuAvailable = isWebGpuAvailable();
   const [modelId, setModelId] = useState<AsrModelId>(DEFAULT_ASR_MODEL_ID);
   const [device, setDevice] = useState<AsrDevice>(webGpuAvailable ? 'webgpu' : 'wasm');
@@ -52,6 +48,15 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
 
   const model = ASR_MODELS.find((item) => item.id === modelId) ?? ASR_MODELS[1];
   const modelSize = model.sizeMB[device];
+
+  function formatSeconds(milliseconds: number): string {
+    const seconds = Math.round(milliseconds / 1000);
+    if (seconds < 60) return t('asr.seconds', { count: seconds });
+    return t('asr.minutesSeconds', {
+      minutes: Math.floor(seconds / 60),
+      seconds: seconds % 60,
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -89,7 +94,11 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
     setError('');
     setNotice('');
     setOutcome(null);
-    setProgress({ phase: 'decode', ratio: null, detail: '正在提取音轨' });
+    setProgress({
+      phase: 'decode',
+      ratio: null,
+      message: { key: 'asr.progress.extracting' },
+    });
     // 借用户点击这次交互申请持久化存储，避免下载好的模型被浏览器自动清理。
     void requestPersistentStorage();
 
@@ -104,16 +113,16 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
         onNotice: setNotice,
       });
       if (result.segments.length === 0) {
-        setNotice('没有识别到有效语音，可以换用更大模型或确认视频包含人声。');
+        setNotice(t('asr.noSpeech'));
       } else {
         setOutcome(result);
         setCached(true);
       }
     } catch (caught) {
       if (caught instanceof DOMException && caught.name === 'AbortError') {
-        setNotice('已取消识别。');
+        setNotice(t('asr.cancelled'));
       } else {
-        setError(caught instanceof Error ? caught.message : '识别失败');
+        setError(caught instanceof Error ? caught.message : t('asr.failed'));
       }
     } finally {
       controllerRef.current = null;
@@ -132,14 +141,14 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
     <div className="edit-block asr-block">
       <div className="block-heading">
         <div>
-          <h3>智能识别</h3>
-          <p>在本机把音轨转成字幕，音视频不会上传</p>
+          <h3>{t('asr.title')}</h3>
+          <p>{t('asr.description')}</p>
         </div>
         <Sparkles size={18} />
       </div>
 
       <label className="field-row select-row">
-        <span>模型</span>
+        <span>{t('asr.model')}</span>
         <select
           value={modelId}
           disabled={running}
@@ -147,34 +156,34 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
         >
           {ASR_MODELS.map((item) => (
             <option key={item.id} value={item.id}>
-              {item.label} · {item.detail}
+              {t(item.labelKey)} · {t(item.detailKey)}
             </option>
           ))}
         </select>
       </label>
 
       <label className="field-row select-row">
-        <span>语言</span>
+        <span>{t('asr.language')}</span>
         <select
           value={language}
           disabled={running}
           onChange={(event) => setLanguage(event.target.value as AsrLanguage)}
         >
           {ASR_LANGUAGES.map((item) => (
-            <option key={item.value} value={item.value}>{item.label}</option>
+            <option key={item.value} value={item.value}>{t(item.labelKey)}</option>
           ))}
         </select>
       </label>
 
       <label className="field-row select-row">
-        <span>运行方式</span>
+        <span>{t('asr.device')}</span>
         <select
           value={device}
           disabled={running}
           onChange={(event) => setDevice(event.target.value as AsrDevice)}
         >
           <option value="webgpu" disabled={!webGpuAvailable}>
-            WebGPU{webGpuAvailable ? '' : '（当前浏览器不可用）'}
+            WebGPU{webGpuAvailable ? '' : t('asr.unavailable')}
           </option>
           <option value="wasm">CPU</option>
         </select>
@@ -182,8 +191,8 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
 
       <p className="asr-model-note">
         {cached
-          ? '该模型已缓存在本机，无需重新下载。'
-          : `首次使用需从 Hugging Face 下载约 ${modelSize} MB 模型，之后由浏览器缓存复用。`}
+          ? t('asr.modelCached')
+          : t('asr.modelDownload', { size: modelSize })}
       </p>
 
       {running ? (
@@ -195,11 +204,15 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
             />
           </div>
           <div className="progress-copy">
-            <span>{progress?.detail ?? '正在识别'}</span>
+            <span>
+              {progress
+                ? t(progress.message.key, progress.message.values)
+                : t('asr.recognizing')}
+            </span>
             <span className="mono-chip">{formatSeconds(elapsedMs)}</span>
           </div>
           <button type="button" className="secondary-button compact asr-cancel" onClick={handleCancel}>
-            <CircleStop size={15} /> 取消识别
+            <CircleStop size={15} /> {t('asr.cancel')}
           </button>
         </div>
       ) : (
@@ -209,12 +222,12 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
           onClick={() => void handleStart()}
           disabled={disabled || !media.info.hasAudio}
         >
-          <Sparkles size={17} /> 开始识别
+          <Sparkles size={17} /> {t('asr.start')}
         </button>
       )}
 
       {!media.info.hasAudio && (
-        <div className="notice-line" role="status">该视频没有音轨，无法识别字幕。</div>
+        <div className="notice-line" role="status">{t('asr.noAudio')}</div>
       )}
       {notice && <div className="notice-line" role="status">{notice}</div>}
       {error && <div className="error-line" role="alert">{error}</div>}
@@ -222,9 +235,13 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
       {outcome && (
         <div className="asr-result">
           <div className="asr-result-heading">
-            <strong>识别完成</strong>
+            <strong>{t('asr.complete')}</strong>
             <span className="mono-chip">
-              {outcome.segments.length} 段 · {recognizedChars} 字 · {formatSeconds(outcome.elapsedMs)}
+              {t('asr.resultSummary', {
+                segments: outcome.segments.length,
+                chars: recognizedChars,
+                duration: formatSeconds(outcome.elapsedMs),
+              })}
             </span>
           </div>
           <ul className="asr-result-preview">
@@ -238,7 +255,7 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
               className="primary-button compact"
               onClick={() => onApply(outcome.segments, 'replace')}
             >
-              {existingCount > 0 ? '替换现有字幕' : '生成字幕段'}
+              {existingCount > 0 ? t('asr.replace') : t('asr.generate')}
             </button>
             {existingCount > 0 && (
               <button
@@ -246,7 +263,7 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
                 className="secondary-button compact"
                 onClick={() => onApply(outcome.segments, 'append')}
               >
-                追加到末尾
+                {t('asr.append')}
               </button>
             )}
           </div>
@@ -255,7 +272,7 @@ export function AsrPanel({ media, existingCount, disabled, onApply }: AsrPanelPr
 
       {running && (
         <p className="asr-running-note">
-          <LoaderCircle className="spin" size={13} /> 识别期间请保持页面打开，首次加载模型耗时较长。
+          <LoaderCircle className="spin" size={13} /> {t('asr.runningNote')}
         </p>
       )}
     </div>

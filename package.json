@@ -22,11 +22,14 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "i18next": "^26.4.2",
+    "i18next-browser-languagedetector": "^8.2.1",
     "lucide-react": "^0.468.0",
     "mp4-muxer": "^5.2.2",
     "mp4box": "^2.4.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "react-i18next": "^17.0.15",
     "vite": "^8.3.0"
   },
   "devDependencies": {

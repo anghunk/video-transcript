@@ -1,4 +1,5 @@
 import { useRef, useState, type DragEvent as ReactDragEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FileVideo,
   Github,
@@ -13,6 +14,7 @@ import {
 import logoUrl from '../../public/logo.webp';
 import workspacePreviewUrl from '../../docs/workspace.png';
 import type { CacheOffer, ThemeMode } from '../types';
+import { LanguageToggle } from './LanguageToggle';
 import { ParticleField } from './ParticleField';
 
 interface UploadScreenProps {
@@ -46,9 +48,13 @@ export function UploadScreen({
   onDiscard,
   onDrop,
 }: UploadScreenProps) {
+  const { t } = useTranslation();
   const [dragActive, setDragActive] = useState(false);
   const screenRef = useRef<HTMLDivElement>(null);
   const busy = loading || restoring;
+  const themeToggleLabel = theme === 'dark'
+    ? t('common.theme.switchToLight')
+    : t('common.theme.switchToDark');
 
   return (
     <div
@@ -75,7 +81,7 @@ export function UploadScreen({
             <div className="cache-banner-status">
               <span className="cache-banner-icon"><FileVideo size={17} /></span>
               <div className="cache-banner-copy">
-                <strong>已找到上次的工作台缓存</strong>
+                <strong>{t('landing.cacheFound')}</strong>
                 <span>{cacheOffer.fileName} · {cacheOffer.savedAt}</span>
               </div>
             </div>
@@ -86,7 +92,7 @@ export function UploadScreen({
                 onClick={onDiscard}
                 disabled={restoring}
               >
-                <Trash2 size={15} /> 丢弃
+                <Trash2 size={15} /> {t('landing.discard')}
               </button>
               <button
                 type="button"
@@ -95,7 +101,7 @@ export function UploadScreen({
                 disabled={restoring}
               >
                 {restoring ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}
-                {restoring ? '正在恢复' : '继续编辑'}
+                {restoring ? t('landing.restoring') : t('landing.continueEditing')}
               </button>
             </div>
           </div>
@@ -103,12 +109,12 @@ export function UploadScreen({
       )}
 
       <header className="landing-nav">
-        <a className="landing-brand" href="/" aria-label="返回字幕工作室首页">
+        <a className="landing-brand" href="/" aria-label={t('landing.homeLabel')}>
           <span className="landing-logo">
             <img src={logoUrl} alt="" />
           </span>
           <span className="landing-brand-copy">
-            <strong>字幕工作室</strong>
+            <strong>{t('common.brandName')}</strong>
             <small>VIDEO TRANSCRIPT</small>
           </span>
         </a>
@@ -119,17 +125,18 @@ export function UploadScreen({
             href="https://github.com/anghunk/video-transcript"
             target="_blank"
             rel="noreferrer"
-            aria-label="打开 GitHub 项目"
+            aria-label={t('landing.githubLabel')}
           >
             <Github size={17} />
             <span>GitHub</span>
           </a>
+          <LanguageToggle />
           <button
             type="button"
             className="theme-toggle landing-theme-toggle"
             onClick={onToggleTheme}
-            title={theme === 'dark' ? '切换日间模式' : '切换黑夜模式'}
-            aria-label={theme === 'dark' ? '切换日间模式' : '切换黑夜模式'}
+            title={themeToggleLabel}
+            aria-label={themeToggleLabel}
           >
             {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
           </button>
@@ -141,10 +148,10 @@ export function UploadScreen({
           <div className="landing-hero-inner">
             <span className="landing-hero-kicker">
               <span className="landing-hero-dot" />
-              本地视频字幕工具
+              {t('landing.kicker')}
             </span>
-            <h1>视频加字幕，<span>简单一点。</span></h1>
-            <p>导入视频，编辑字幕，导出成片。视频始终留在当前设备。</p>
+            <h1>{t('landing.titlePrefix')}<span>{t('landing.titleAccent')}</span></h1>
+            <p>{t('landing.description')}</p>
 
             <div className="landing-hero-actions">
               <button
@@ -154,9 +161,15 @@ export function UploadScreen({
                 onClick={onSelect}
               >
                 {busy ? <LoaderCircle className="spin" size={18} /> : <Upload size={18} />}
-                <span>{loading ? '正在解析视频' : restoring ? '正在恢复项目' : '选择视频'}</span>
+                <span>
+                  {loading
+                    ? t('landing.parsingVideo')
+                    : restoring
+                      ? t('landing.restoringProject')
+                      : t('landing.chooseVideo')}
+                </span>
               </button>
-              <span className="landing-hero-note">MP4 · 无需上传 · 无需安装</span>
+              <span className="landing-hero-note">{t('landing.featureNote')}</span>
             </div>
 
             {error && <div className="error-line upload-error landing-error" role="alert">{error}</div>}
@@ -166,8 +179,8 @@ export function UploadScreen({
 
         <section className="landing-upload-section" id="upload">
           <div className="landing-section-heading">
-            <h2>从一个视频开始</h2>
-            <p>拖入文件后，所有编辑都在浏览器里完成。</p>
+            <h2>{t('landing.startTitle')}</h2>
+            <p>{t('landing.startDescription')}</p>
           </div>
 
           <div
@@ -175,7 +188,7 @@ export function UploadScreen({
             role="button"
             tabIndex={busy ? -1 : 0}
             aria-disabled={busy}
-            aria-label="选择或拖入本地 MP4 视频"
+            aria-label={t('landing.uploadAria')}
             onClick={() => {
               if (!busy) onSelect();
             }}
@@ -203,23 +216,23 @@ export function UploadScreen({
               <FileVideo size={29} strokeWidth={1.5} />
             </span>
             <span className="upload-zone-copy">
-              <strong>{loading ? '正在读取视频' : '把 MP4 拖到这里'}</strong>
-              <span>{loading ? '正在解析轨道与画面信息，请稍候' : '或点击选择本地文件'}</span>
+              <strong>{loading ? t('landing.readingVideo') : t('landing.dropHere')}</strong>
+              <span>{loading ? t('landing.parsingDetails') : t('landing.clickChoose')}</span>
             </span>
             <span className="upload-zone-action">
               <Upload size={14} />
-              选择文件
+              {t('landing.chooseFile')}
             </span>
             <span className="upload-zone-corner">LOCAL ONLY</span>
           </div>
 
           <div className="upload-trust">
-            <span><ShieldCheck size={14} /> 本地处理</span>
-            <span>原分辨率导出</span>
-            <span>无水印</span>
+            <span><ShieldCheck size={14} /> {t('landing.trustLocal')}</span>
+            <span>{t('landing.trustResolution')}</span>
+            <span>{t('landing.trustWatermark')}</span>
           </div>
 
-          <div className="landing-preview" aria-label="字幕工作室界面预览">
+          <div className="landing-preview" aria-label={t('landing.previewAria')}>
             <div className="product-frame">
               <div className="product-frame-bar">
                 <span className="product-frame-dots" aria-hidden="true">
@@ -227,12 +240,12 @@ export function UploadScreen({
                   <i />
                   <i />
                 </span>
-                <span className="product-frame-title">字幕工作室 · 工作台</span>
+                <span className="product-frame-title">{t('landing.frameTitle')}</span>
                 <span className="product-frame-state">LOCAL</span>
               </div>
               <img
                 src={workspacePreviewUrl}
-                alt="字幕工作室工作台，包含视频预览、字幕时间轴和右侧编辑面板"
+                alt={t('landing.previewAlt')}
               />
             </div>
           </div>
@@ -240,8 +253,8 @@ export function UploadScreen({
       </main>
 
       <footer className="landing-footer">
-        <span>字幕工作室</span>
-        <span>视频不会离开你的设备</span>
+        <span>{t('common.brandName')}</span>
+        <span>{t('landing.footerPrivacy')}</span>
       </footer>
     </div>
   );

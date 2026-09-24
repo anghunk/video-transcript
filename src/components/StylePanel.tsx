@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { DEFAULT_STYLE } from '../lib/render';
 import type {
   SubtitleAlign,
@@ -5,36 +6,36 @@ import type {
   SubtitleStyle,
 } from '../types';
 
-const POSITION_META: Array<{ value: SubtitlePosition; label: string }> = [
-  { value: 'top', label: '顶部' },
-  { value: 'middle', label: '中间' },
-  { value: 'bottom', label: '底部' },
+const POSITION_META: Array<{ value: SubtitlePosition; labelKey: string }> = [
+  { value: 'top', labelKey: 'style.positions.top' },
+  { value: 'middle', labelKey: 'style.positions.middle' },
+  { value: 'bottom', labelKey: 'style.positions.bottom' },
 ];
 
-const ALIGN_META: Array<{ value: SubtitleAlign; label: string }> = [
-  { value: 'left', label: '左对齐' },
-  { value: 'center', label: '居中' },
-  { value: 'right', label: '右对齐' },
+const ALIGN_META: Array<{ value: SubtitleAlign; labelKey: string }> = [
+  { value: 'left', labelKey: 'style.alignments.left' },
+  { value: 'center', labelKey: 'style.alignments.center' },
+  { value: 'right', labelKey: 'style.alignments.right' },
 ];
 
 interface SubtitleStylePreset {
   id: string;
-  label: string;
-  description: string;
+  labelKey: string;
+  descriptionKey: string;
   style: SubtitleStyle;
 }
 
 const STYLE_PRESETS: SubtitleStylePreset[] = [
   {
     id: 'classic',
-    label: '经典',
-    description: '黑底白字',
+    labelKey: 'style.presets.classic.label',
+    descriptionKey: 'style.presets.classic.description',
     style: { ...DEFAULT_STYLE },
   },
   {
     id: 'cinema',
-    label: '电影',
-    description: '半透明黑底',
+    labelKey: 'style.presets.cinema.label',
+    descriptionKey: 'style.presets.cinema.description',
     style: {
       ...DEFAULT_STYLE,
       backgroundColor: '#000000',
@@ -45,8 +46,8 @@ const STYLE_PRESETS: SubtitleStylePreset[] = [
   },
   {
     id: 'light',
-    label: '简洁',
-    description: '白底黑字',
+    labelKey: 'style.presets.light.label',
+    descriptionKey: 'style.presets.light.description',
     style: {
       ...DEFAULT_STYLE,
       backgroundColor: '#ffffff',
@@ -56,8 +57,8 @@ const STYLE_PRESETS: SubtitleStylePreset[] = [
   },
   {
     id: 'highlight',
-    label: '强调',
-    description: '黑底黄字',
+    labelKey: 'style.presets.highlight.label',
+    descriptionKey: 'style.presets.highlight.description',
     style: {
       ...DEFAULT_STYLE,
       backgroundColor: '#000000',
@@ -77,6 +78,7 @@ export function StylePanel({
   defaultStyle,
   onChange,
 }: StylePanelProps) {
+  const { t } = useTranslation();
   const style = { ...DEFAULT_STYLE, ...defaultStyle };
   const activePresetId = STYLE_PRESETS.find((preset) =>
     Object.entries(preset.style).every(
@@ -88,13 +90,13 @@ export function StylePanel({
     <div className="edit-block">
       <div className="block-heading">
         <div>
-          <h3>字幕样式</h3>
-          <p>应用于全部字幕</p>
+          <h3>{t('style.title')}</h3>
+          <p>{t('style.description')}</p>
         </div>
       </div>
 
       <div className="style-presets">
-        <span className="field-label">预设样式</span>
+        <span className="field-label">{t('style.presetLabel')}</span>
         <div className="preset-grid">
           {STYLE_PRESETS.map((preset) => (
             <button
@@ -116,12 +118,12 @@ export function StylePanel({
                   className="preset-preview-text"
                   style={{ color: preset.style.textColor }}
                 >
-                  字幕
+                  {t('style.subtitlePreview')}
                 </span>
               </span>
               <span className="preset-copy">
-                <strong>{preset.label}</strong>
-                <span>{preset.description}</span>
+                <strong>{t(preset.labelKey)}</strong>
+                <span>{t(preset.descriptionKey)}</span>
               </span>
             </button>
           ))}
@@ -129,7 +131,7 @@ export function StylePanel({
       </div>
 
       <label className="field-row">
-        <span>背景色</span>
+        <span>{t('style.backgroundColor')}</span>
         <span className="color-field">
           <input
             type="color"
@@ -140,7 +142,7 @@ export function StylePanel({
         </span>
       </label>
       <label className="field-row">
-        <span>文字色</span>
+        <span>{t('style.textColor')}</span>
         <span className="color-field">
           <input
             type="color"
@@ -151,7 +153,7 @@ export function StylePanel({
         </span>
       </label>
       <label className="field-row">
-        <span>字号</span>
+        <span>{t('style.fontSize')}</span>
         <input
           className="range-input"
           type="range"
@@ -164,7 +166,7 @@ export function StylePanel({
         <span className="mono-chip">{style.fontSize}px</span>
       </label>
       <div className="field-row">
-        <span>不透明度</span>
+        <span>{t('style.opacity')}</span>
         <input
           className="range-input"
           type="range"
@@ -178,15 +180,15 @@ export function StylePanel({
       </div>
 
       <SegmentedControl
-        label="位置"
+        label={t('style.position')}
         value={style.position}
-        options={POSITION_META}
+        options={POSITION_META.map((item) => ({ value: item.value, label: t(item.labelKey) }))}
         onChange={(value) => onChange({ position: value as SubtitlePosition })}
       />
       <SegmentedControl
-        label="对齐"
+        label={t('style.align')}
         value={style.align}
-        options={ALIGN_META}
+        options={ALIGN_META.map((item) => ({ value: item.value, label: t(item.labelKey) }))}
         onChange={(value) => onChange({ align: value as SubtitleAlign })}
       />
     </div>

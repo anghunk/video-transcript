@@ -1,4 +1,5 @@
 import type { SourceMediaRuntime } from './media';
+import i18n from '../i18n';
 import { createSegmentId } from './subtitles';
 import type { SubtitleSegment } from '../types';
 import {
@@ -6,6 +7,7 @@ import {
   type AsrChunk,
   type AsrDevice,
   type AsrLanguage,
+  type AsrProgressMessage,
   type AsrWorkerRequest,
   type AsrWorkerResponse,
 } from './asr-protocol';
@@ -16,8 +18,8 @@ export type AsrModelId = 'tiny' | 'base' | 'small';
 
 export interface AsrModelOption {
   id: AsrModelId;
-  label: string;
-  detail: string;
+  labelKey: string;
+  detailKey: string;
   repoId: string;
   /** 首次使用需要下载的大致体积（MB），含分词器等配置文件。 */
   sizeMB: Record<AsrDevice, number>;
@@ -26,22 +28,22 @@ export interface AsrModelOption {
 export const ASR_MODELS: AsrModelOption[] = [
   {
     id: 'tiny',
-    label: '快速',
-    detail: '速度最快，中文准确率一般',
+    labelKey: 'asr.models.tiny.label',
+    detailKey: 'asr.models.tiny.detail',
     repoId: 'onnx-community/whisper-tiny',
     sizeMB: { wasm: 45, webgpu: 120 },
   },
   {
     id: 'base',
-    label: '均衡',
-    detail: '速度与准确率折中',
+    labelKey: 'asr.models.base.label',
+    detailKey: 'asr.models.base.detail',
     repoId: 'onnx-community/whisper-base',
     sizeMB: { wasm: 80, webgpu: 205 },
   },
   {
     id: 'small',
-    label: '精准',
-    detail: '中文准确率更好，速度明显更慢',
+    labelKey: 'asr.models.small.label',
+    detailKey: 'asr.models.small.detail',
     repoId: 'onnx-community/whisper-small',
     sizeMB: { wasm: 245, webgpu: 565 },
   },
@@ -49,12 +51,12 @@ export const ASR_MODELS: AsrModelOption[] = [
 
 export const DEFAULT_ASR_MODEL_ID: AsrModelId = 'base';
 
-export const ASR_LANGUAGES: Array<{ value: AsrLanguage; label: string }> = [
-  { value: 'auto', label: '自动检测' },
-  { value: 'chinese', label: '中文' },
-  { value: 'english', label: '英语' },
-  { value: 'japanese', label: '日语' },
-  { value: 'korean', label: '韩语' },
+export const ASR_LANGUAGES: Array<{ value: AsrLanguage; labelKey: string }> = [
+  { value: 'auto', labelKey: 'asr.languages.auto' },
+  { value: 'chinese', labelKey: 'asr.languages.chinese' },
+  { value: 'english', labelKey: 'asr.languages.english' },
+  { value: 'japanese', labelKey: 'asr.languages.japanese' },
+  { value: 'korean', labelKey: 'asr.languages.korean' },
 ];
 
 const EMPTY_SAMPLES = new Float32Array(0);
@@ -178,7 +180,7 @@ type SingleChannel = Float32Array<ArrayBuffer>;
 
 interface DecodeOptions {
   signal?: AbortSignal;
-  onProgress?: (ratio: number | null, detail: string) => void;
+  onProgress?: (ratio: number | null, message: AsrProgressMessage) => void;
   onNotice?: (message: string) => void;
 }
 
@@ -193,7 +195,7 @@ async function decodeWithWebCodecs(
 ): Promise<Float32Array> {
   const audioInfo = media.audioInfo;
   const trackId = media.info.audioTrackId;
-  if (!audioInfo || !trackId) throw new Error('未找到可解码的音轨');
+  if (!audioInfo || !trackId) throw new Error(i18n.t('errors.audioTrackUnavailable'));
 
   // 媒体运行时体积较大，只在真正解码时按需加载，避免进入首屏包。
   const { extractTrackSamples } = await import('./media');
@@ -264,7 +266,9 @@ async function decodeWithWebCodecs(
         );
       }
       queuedSamples += samples.length;
-      options.onProgress?.(Math.min(0.95, queuedSamples / totalSamples), '正在提取音轨');
+      options.onProgress?.(Math.min(0.95, queuedSamples / totalSamples), {
+        key: 'asr.progress.extracting',
+      });
     });
     await decoder.flush();
   } finally {
@@ -272,8 +276,8 @@ async function decodeWithWebCodecs(
   }
 
   if (decoderError) throw decoderError;
-  if (decodedFrames === 0) throw new Error('音轨解码结果为空');
-  options.onProgress?.(1, '音轨提取完成');
+  if (decodedFrames === 0) throw new Error(i18n.t('errors.emptyAudioDecode'));
+  options.onProgress?.(1, { key: 'asr.progress.extracted' });
   return writer.toSamples();
 }
 
@@ -285,13 +289,13 @@ async function decodeWithWebAudio(
   const AudioContextCtor =
     window.AudioContext ??
     (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioContextCtor) throw new Error('当前浏览器不支持音频解码');
+  if (!AudioContextCtor) throw new Error(i18n.t('errors.audioDecodeUnsupported'));
 
   if (media.info.duration > 1800) {
-    options.onNotice?.('当前浏览器不支持流式解码，长视频将占用大量内存，建议在最新版 Chrome 或 Edge 中使用。');
+    options.onNotice?.(i18n.t('errors.nonStreamingNotice'));
   }
 
-  options.onProgress?.(null, '正在解码音频');
+  options.onProgress?.(null, { key: 'asr.progress.decoding' });
   const context = new AudioContextCtor();
   let decoded: AudioBuffer;
   try {
@@ -307,7 +311,7 @@ async function decodeWithWebAudio(
   source.connect(offline.destination);
   source.start();
   const rendered = await offline.startRendering();
-  options.onProgress?.(1, '音轨提取完成');
+  options.onProgress?.(1, { key: 'asr.progress.extracted' });
   return rendered.getChannelData(0).slice();
 }
 
@@ -316,14 +320,14 @@ export async function extractMonoAudio(
   media: SourceMediaRuntime,
   options: DecodeOptions = {},
 ): Promise<Float32Array> {
-  if (!media.info.hasAudio) throw new Error('该视频没有音轨，无法识别字幕');
+  if (!media.info.hasAudio) throw new Error(i18n.t('errors.noAudioTrack'));
   options.signal?.throwIfAborted();
 
   if (canStreamDecode(media)) {
     try {
       return await decodeWithWebCodecs(media, options);
     } catch (error) {
-      options.onNotice?.(`流式解码不可用，已改用整段解码：${errorMessage(error)}`);
+      options.onNotice?.(i18n.t('errors.streamDecodeFallback', { message: errorMessage(error) }));
     }
   }
   return decodeWithWebAudio(media, options);
@@ -447,7 +451,7 @@ export function buildSegmentsFromChunks(
 export interface AsrProgress {
   phase: 'decode' | 'download' | 'prepare' | 'transcribe';
   ratio: number | null;
-  detail: string;
+  message: AsrProgressMessage;
 }
 
 export interface AsrRunOptions {
@@ -473,7 +477,7 @@ export async function runAsr(options: AsrRunOptions): Promise<AsrRunResult> {
 
   const audio = await extractMonoAudio(media, {
     signal,
-    onProgress: (ratio, detail) => onProgress?.({ phase: 'decode', ratio, detail }),
+    onProgress: (ratio, message) => onProgress?.({ phase: 'decode', ratio, message }),
     onNotice,
   });
   signal?.throwIfAborted();
@@ -483,7 +487,7 @@ export async function runAsr(options: AsrRunOptions): Promise<AsrRunResult> {
 
   try {
     chunks = await new Promise<AsrChunk[]>((resolve, reject) => {
-      const abort = () => reject(new DOMException('已取消识别', 'AbortError'));
+      const abort = () => reject(new DOMException(i18n.t('errors.asrCancelled'), 'AbortError'));
       signal?.addEventListener('abort', abort, { once: true });
       const resolveOnce = (value: AsrChunk[]) => {
         signal?.removeEventListener('abort', abort);
@@ -497,7 +501,7 @@ export async function runAsr(options: AsrRunOptions): Promise<AsrRunResult> {
       worker.onmessage = (event: MessageEvent<AsrWorkerResponse>) => {
         const message = event.data;
         if (message.type === 'progress') {
-          onProgress?.({ phase: message.phase, ratio: message.ratio, detail: message.detail });
+          onProgress?.({ phase: message.phase, ratio: message.ratio, message: message.message });
           return;
         }
         if (message.type === 'result') {
@@ -507,9 +511,9 @@ export async function runAsr(options: AsrRunOptions): Promise<AsrRunResult> {
         rejectOnce(new Error(message.message));
       };
       worker.onerror = (event) => {
-        rejectOnce(new Error(event.message || '识别工作线程异常退出'));
+        rejectOnce(new Error(event.message || i18n.t('errors.asrWorkerExited')));
       };
-      worker.onmessageerror = () => rejectOnce(new Error('识别结果解析失败'));
+      worker.onmessageerror = () => rejectOnce(new Error(i18n.t('errors.asrResultParseFailed')));
 
       const request: AsrWorkerRequest = {
         audio,

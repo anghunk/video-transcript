@@ -1,4 +1,5 @@
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer';
+import i18n from '../i18n';
 import type {
   SourceMediaRuntime,
   CopiedAudioInfo,
@@ -61,7 +62,7 @@ function createCanvas(
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext('2d');
-  if (!context) throw new Error('无法创建画布绘制上下文');
+  if (!context) throw new Error(i18n.t('errors.canvasContextFailed'));
   return { canvas, context };
 }
 
@@ -155,10 +156,10 @@ export async function exportSubtitleVideo(options: ExportOptions): Promise<Blob>
   } = options;
 
   if (!media.videoTrack || !media.videoConfig) {
-    throw new Error('当前视频轨道无法解码，换用 H.264 编码的 MP4 后重试。');
+    throw new Error(i18n.t('errors.videoTrackUnsupported'));
   }
   if (!isExportSupported()) {
-    throw new Error('当前浏览器不支持 WebCodecs，请使用最新版 Chrome 或 Edge。');
+    throw new Error(i18n.t('errors.webCodecsUnsupported'));
   }
 
   const sourceWidth = media.info.width;
@@ -344,24 +345,27 @@ export async function exportSubtitleVideo(options: ExportOptions): Promise<Blob>
   encoder.configure(metadata);
 
   await collectVideoSamples(media, decoder, (progress) => {
-    onProgress?.(progress * 0.75, progress < 1 ? '解码视频帧' : '视频帧解码完成');
+    onProgress?.(
+      progress * 0.75,
+      progress < 1 ? 'export.phases.decodingFrames' : 'export.phases.decodedFrames',
+    );
   });
 
   await flushVideoPipeline();
 
   if (includeAudio && media.audioInfo?.codecFamily === 'aac') {
     await muxAudioSamples(media, media.audioInfo, muxer, (progress) => {
-      onProgress?.(0.75 + progress * 0.2, '封装音轨');
+      onProgress?.(0.75 + progress * 0.2, 'export.phases.muxingAudio');
     });
   }
 
-  onProgress?.(0.96, '写入 MP4 文件');
+  onProgress?.(0.96, 'export.phases.writing');
   muxer.finalize();
   const target = muxer.target;
   const result = new Blob([target.buffer as ArrayBuffer], {
     type: 'video/mp4',
   });
-  onProgress?.(1, '导出完成');
+  onProgress?.(1, 'export.phases.complete');
   return result;
 }
 

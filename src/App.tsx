@@ -9,6 +9,7 @@ import {
   type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AudioLines,
   Download,
@@ -82,6 +83,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 function App() {
+  const { t } = useTranslation();
   const [route, setRoute] = useState<AppRoute>(getCurrentRoute);
   const [media, setMedia] = useState<SourceMediaRuntime | null>(null);
   const [mediaUrl, setMediaUrl] = useState('');
@@ -298,7 +300,7 @@ function App() {
         const restored = await restoreCachedWorkspace();
         if (!restored) navigate('/', { replace: true });
       } catch (caughtError) {
-        setError(caughtError instanceof Error ? caughtError.message : '恢复缓存失败');
+        setError(caughtError instanceof Error ? caughtError.message : t('errors.restoreCacheFailed'));
         navigate('/', { replace: true });
       } finally {
         restoreLockRef.current = false;
@@ -331,7 +333,7 @@ function App() {
       setIncludeAudio(edits.includeAudio);
       return true;
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : '恢复缓存失败');
+      setError(caughtError instanceof Error ? caughtError.message : t('errors.restoreCacheFailed'));
       return false;
     }
   }
@@ -373,7 +375,7 @@ function App() {
     options: { cacheVideo?: boolean } = {},
   ): Promise<boolean> {
     if (!file.type.startsWith('video/') && !file.name.toLowerCase().endsWith('.mp4')) {
-      setError('请选择 MP4 视频文件');
+      setError(t('errors.selectMp4'));
       return false;
     }
     setError('');
@@ -384,7 +386,7 @@ function App() {
       const { loadSourceMedia } = await import('./lib/media');
       const runtime = await loadSourceMedia(file);
       if (!runtime.videoTrack || !runtime.videoConfig) {
-        throw new Error('未识别到可解码的视频轨道，请换用 H.264 编码的 MP4。');
+        throw new Error(t('errors.noDecodableVideoTrack'));
       }
       if (mediaUrl) URL.revokeObjectURL(mediaUrl);
       const nextUrl = URL.createObjectURL(new Blob([runtime.info.buffer], { type: 'video/mp4' }));
@@ -403,7 +405,7 @@ function App() {
       }
       return true;
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : '视频解析失败');
+      setError(caughtError instanceof Error ? caughtError.message : t('errors.videoParseFailed'));
       return false;
     } finally {
       setLoading(false);
@@ -478,7 +480,7 @@ function App() {
       id: createSegmentId(),
       start: safeStart,
       end: safeEnd,
-      text: '新字幕',
+      text: t('segments.newText'),
     };
     setSegments((current) => sortSegments([...current, nextSegment]));
     setSelectedId(nextSegment.id);
@@ -701,7 +703,7 @@ function App() {
     if (!media || !media.videoTrack || !media.videoConfig) return;
     setExporting(true);
     setExportProgress(0);
-    setExportPhase('正在准备编码');
+    setExportPhase('export.phases.preparing');
     setError('');
     try {
       const { exportSubtitleVideo } = await import('./lib/export');
@@ -720,13 +722,13 @@ function App() {
       const link = document.createElement('a');
       const sourceName = media.info.name.replace(/\.[^.]+$/, '') || 'subtitle-video';
       link.href = downloadUrl;
-      link.download = `${sourceName}-带字幕.mp4`;
+      link.download = `${sourceName}${t('export.filenameSuffix')}.mp4`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : '导出失败');
+      setError(caughtError instanceof Error ? caughtError.message : t('errors.exportFailed'));
     } finally {
       setExporting(false);
     }
@@ -797,12 +799,12 @@ function App() {
                 type="button"
                 className="secondary-button workspace-home-button"
                 onClick={returnHome}
-                title="返回首页"
-                aria-label="返回首页"
+                title={t('workspace.home')}
+                aria-label={t('workspace.home')}
                 disabled={exporting}
               >
                 <House size={15} />
-                <span>返回首页</span>
+                <span>{t('workspace.home')}</span>
               </button>
             </header>
 
@@ -835,8 +837,8 @@ function App() {
                     type="button"
                     className="stage-play-button"
                     onClick={handlePlayPause}
-                    aria-label="播放"
-                    title="播放"
+                    aria-label={t('workspace.play')}
+                    title={t('workspace.play')}
                   >
                     <Play size={26} fill="currentColor" />
                   </button>
@@ -844,25 +846,42 @@ function App() {
               </div>
 
               <div className="player-bar">
-                <button type="button" className="control-button" onClick={handlePlayPause} title={playing ? '暂停' : '播放'}>
+                <button
+                  type="button"
+                  className="control-button"
+                  onClick={handlePlayPause}
+                  title={playing ? t('workspace.pause') : t('workspace.play')}
+                  aria-label={playing ? t('workspace.pause') : t('workspace.play')}
+                >
                   {playing ? <Pause size={17} /> : <Play size={17} />}
                 </button>
-                <button type="button" className="control-button" onClick={handleResetPlayback} title="重置播放" aria-label="重置播放">
+                <button
+                  type="button"
+                  className="control-button"
+                  onClick={handleResetPlayback}
+                  title={t('workspace.resetPlayback')}
+                  aria-label={t('workspace.resetPlayback')}
+                >
                   <RotateCcw size={16} />
                 </button>
                 <button
                   type="button"
                   className="control-button text-button preview-button"
                   onClick={openFullscreenPreview}
-                  title="全屏预览"
-                  aria-label="全屏预览视频"
+                  title={t('workspace.fullscreen')}
+                  aria-label={t('workspace.fullscreen')}
                 >
                   <Maximize2 size={16} />
-                  <span>预览</span>
+                  <span>{t('workspace.preview')}</span>
                 </button>
                 <span className="timecode">{formatClock(currentTime)} / {formatClock(duration)}</span>
-                <button type="button" className="control-button text-button add-subtitle-button" onClick={handleAddSegment} title="添加字幕（⌘/Ctrl + Enter）">
-                  <span>添加字幕</span>
+                <button
+                  type="button"
+                  className="control-button text-button add-subtitle-button"
+                  onClick={handleAddSegment}
+                  title={`${t('workspace.addSubtitle')} (⌘/Ctrl + Enter)`}
+                >
+                  <span>{t('workspace.addSubtitle')}</span>
                   <kbd className="shortcut-hint">⌘/Ctrl + Enter</kbd>
                 </button>
               </div>
@@ -893,7 +912,7 @@ function App() {
 
           <aside className="sidebar-column">
             <div className="workspace-toolbar">
-              <div className="workspace-tabs" role="tablist" aria-label="右侧面板">
+              <div className="workspace-tabs" role="tablist" aria-label={t('workspace.rightPanel')}>
                 <button
                   type="button"
                   role="tab"
@@ -901,7 +920,7 @@ function App() {
                   className={workspaceTab === 'subtitles' ? 'active' : ''}
                   onClick={() => setWorkspaceTab('subtitles')}
                 >
-                  <List size={15} /> 字幕段
+                  <List size={15} /> {t('workspace.tabs.subtitles')}
                 </button>
                 <button
                   type="button"
@@ -910,7 +929,7 @@ function App() {
                   className={workspaceTab === 'asr' ? 'active' : ''}
                   onClick={() => setWorkspaceTab('asr')}
                 >
-                  <AudioLines size={15} /> 识别
+                  <AudioLines size={15} /> {t('workspace.tabs.asr')}
                 </button>
                 <button
                   type="button"
@@ -919,7 +938,7 @@ function App() {
                   className={workspaceTab === 'style' ? 'active' : ''}
                   onClick={() => setWorkspaceTab('style')}
                 >
-                  <Palette size={15} /> 字幕样式
+                  <Palette size={15} /> {t('workspace.tabs.style')}
                 </button>
                 <button
                   type="button"
@@ -928,15 +947,15 @@ function App() {
                   className={workspaceTab === 'export' ? 'active' : ''}
                   onClick={() => setWorkspaceTab('export')}
                 >
-                  <Download size={15} /> 导出
+                  <Download size={15} /> {t('workspace.tabs.export')}
                 </button>
               </div>
               <button
                 type="button"
                 className="theme-toggle workspace-theme-toggle"
                 onClick={toggleTheme}
-                title={theme === 'dark' ? '切换日间模式' : '切换黑夜模式'}
-                aria-label={theme === 'dark' ? '切换日间模式' : '切换黑夜模式'}
+                title={theme === 'dark' ? t('common.theme.switchToLight') : t('common.theme.switchToDark')}
+                aria-label={theme === 'dark' ? t('common.theme.switchToLight') : t('common.theme.switchToDark')}
               >
                 {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
               </button>
@@ -1008,8 +1027,8 @@ function App() {
       ) : (
         <div className="app-loading" role="status" aria-live="polite">
           <LoaderCircle className="spin" size={24} />
-          <strong>{restoring ? '正在恢复上次项目' : '正在打开工作台'}</strong>
-          <span>正在从本地缓存读取视频和字幕进度，请稍候。</span>
+          <strong>{restoring ? t('workspace.loadingRestore') : t('workspace.loadingOpen')}</strong>
+          <span>{t('workspace.loadingDescription')}</span>
         </div>
       )}
 

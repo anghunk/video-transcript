@@ -52,7 +52,12 @@ async function loadTranscriber(repoId: string, device: AsrDevice): Promise<Trans
   const files = new Map<string, { loaded: number; total: number }>();
   const progress_callback = (event: RuntimeProgressEvent) => {
     if (event.status === 'ready') {
-      post({ type: 'progress', phase: 'prepare', ratio: null, detail: '正在初始化推理会话' });
+      post({
+        type: 'progress',
+        phase: 'prepare',
+        ratio: null,
+        message: { key: 'asr.progress.preparing' },
+      });
       return;
     }
     if (event.file && typeof event.loaded === 'number' && typeof event.total === 'number' && event.total > 0) {
@@ -69,7 +74,13 @@ async function loadTranscriber(repoId: string, device: AsrDevice): Promise<Trans
       type: 'progress',
       phase: 'download',
       ratio: Math.min(1, loaded / total),
-      detail: `正在下载模型 ${toMegabytes(loaded)} / ${toMegabytes(total)} MB`,
+      message: {
+        key: 'asr.progress.downloading',
+        values: {
+          loaded: toMegabytes(loaded),
+          total: toMegabytes(total),
+        },
+      },
     });
   };
 
@@ -153,7 +164,13 @@ async function transcribe(request: AsrWorkerRequest): Promise<AsrChunk[]> {
       type: 'progress',
       phase: 'transcribe',
       ratio: Math.min(1, blockIndex / estimatedBlocks),
-      detail: `正在识别第 ${blockIndex}/${estimatedBlocks} 段`,
+      message: {
+        key: 'asr.progress.transcribing',
+        values: {
+          current: blockIndex,
+          total: estimatedBlocks,
+        },
+      },
     });
   }
 

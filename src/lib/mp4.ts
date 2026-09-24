@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import * as MP4Box from 'mp4box';
 import type {
   ParsedMp4,
@@ -43,7 +44,9 @@ export async function parseMp4(buffer: ArrayBuffer): Promise<ParsedMp4> {
   const info = await new Promise<Mp4Info>((resolve, reject) => {
     file.onReady = (ready) => resolve(toMp4Info(ready));
     file.onError = (module, message) =>
-      reject(new Error(`MP4 解析失败：${module ?? ''} ${message ?? ''}`.trim()));
+      reject(new Error(i18n.t('errors.mp4ParseFailed', {
+        details: `${module ?? ''} ${message ?? ''}`.trim(),
+      })));
 
     file.appendBuffer(asFileBuffer(buffer));
     file.flush();
@@ -138,7 +141,9 @@ export async function extractAllSamples(
 
   await new Promise<void>((resolve, reject) => {
     file.onError = (module, message) =>
-      reject(new Error(`样本提取失败：${module ?? ''} ${message ?? ''}`.trim()));
+      reject(new Error(i18n.t('errors.sampleExtractionFailed', {
+        details: `${module ?? ''} ${message ?? ''}`.trim(),
+      })));
 
     file.onReady = () => {
       const totalSamples = getTrackSampleCount(file, trackId);

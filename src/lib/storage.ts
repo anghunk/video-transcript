@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { ExportQuality, SubtitleSegment, SubtitleStyle } from '../types';
 
 const DB_NAME = 'video-transcript';
@@ -41,7 +42,9 @@ function openDatabase(): Promise<IDBDatabase> {
       }
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('无法打开本地缓存数据库'));
+    request.onerror = () => reject(
+      request.error ?? new Error(i18n.t('errors.cacheDatabaseOpenFailed')),
+    );
   });
 }
 
@@ -55,8 +58,12 @@ function putRecord(storeName: string, value: unknown): Promise<void> {
           db.close();
           resolve();
         };
-        transaction.onerror = () => reject(transaction.error ?? new Error('缓存写入失败'));
-        transaction.onabort = () => reject(transaction.error ?? new Error('缓存写入被中止'));
+        transaction.onerror = () => reject(
+          transaction.error ?? new Error(i18n.t('errors.cacheWriteFailed')),
+        );
+        transaction.onabort = () => reject(
+          transaction.error ?? new Error(i18n.t('errors.cacheWriteAborted')),
+        );
       }),
   );
 }
@@ -70,7 +77,9 @@ function getRecord<T>(storeName: string): Promise<T | null> {
           db.close();
           resolve((request.result as T | undefined) ?? null);
         };
-        request.onerror = () => reject(request.error ?? new Error('缓存读取失败'));
+        request.onerror = () => reject(
+          request.error ?? new Error(i18n.t('errors.cacheReadFailed')),
+        );
       }),
   );
 }
@@ -85,7 +94,9 @@ function deleteRecord(storeName: string): Promise<void> {
           db.close();
           resolve();
         };
-        transaction.onerror = () => reject(transaction.error ?? new Error('缓存清理失败'));
+        transaction.onerror = () => reject(
+          transaction.error ?? new Error(i18n.t('errors.cacheClearFailed')),
+        );
       }),
   );
 }

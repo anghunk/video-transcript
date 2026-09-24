@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { LoaderCircle, Timer, X } from 'lucide-react';
 
 interface ConfirmDialogProps {
@@ -21,11 +22,12 @@ export function ConfirmDialog({
   cancelLabel,
   confirmVariant = 'default',
   busy = false,
-  busyLabel = '处理中',
+  busyLabel,
   onConfirm,
   onCancel,
   onClose,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
   const handleClose = onClose ?? onCancel;
 
   useEffect(() => {
@@ -47,7 +49,13 @@ export function ConfirmDialog({
         aria-label={title}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button type="button" className="confirm-close" onClick={handleClose} aria-label="关闭" title="关闭">
+        <button
+          type="button"
+          className="confirm-close"
+          onClick={handleClose}
+          aria-label={t('common.close')}
+          title={t('common.close')}
+        >
           <X size={16} />
         </button>
         <div className="confirm-icon"><Timer size={22} /></div>
@@ -62,7 +70,7 @@ export function ConfirmDialog({
             disabled={busy}
           >
             {busy && <LoaderCircle className="spin" size={16} />}
-            {busy ? busyLabel : confirmLabel}
+            {busy ? busyLabel ?? t('confirm.busy') : confirmLabel}
           </button>
         </div>
       </div>

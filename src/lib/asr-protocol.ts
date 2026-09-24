@@ -24,12 +24,17 @@ export interface AsrWorkerRequest {
   language: AsrLanguage;
 }
 
+export interface AsrProgressMessage {
+  key: string;
+  values?: Record<string, string | number>;
+}
+
 export interface AsrWorkerProgress {
   type: 'progress';
   phase: 'download' | 'prepare' | 'transcribe';
   /** 0-1 的进度，无法预估时为 null。 */
   ratio: number | null;
-  detail: string;
+  message: AsrProgressMessage;
 }
 
 export type AsrWorkerResponse =

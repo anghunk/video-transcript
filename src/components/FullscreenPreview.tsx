@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Maximize2, Pause, Play, X } from 'lucide-react';
 import type { SubtitleSegment, SubtitleStyle } from '../types';
 import { formatClock } from '../lib/format';
@@ -30,6 +31,7 @@ export function FullscreenPreview({
   onTimeChange,
   onClose,
 }: FullscreenPreviewProps) {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -132,20 +134,20 @@ export function FullscreenPreview({
         className="fullscreen-preview-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="全屏视频预览"
+        aria-label={t('fullscreen.ariaLabel')}
         tabIndex={-1}
       >
         <header className="fullscreen-preview-header">
           <div className="fullscreen-preview-title">
             <Maximize2 size={17} />
-            <strong>视频预览</strong>
+            <strong>{t('fullscreen.title')}</strong>
           </div>
           <button
             type="button"
             className="fullscreen-preview-close"
             onClick={closePreview}
-            aria-label="关闭预览"
-            title="关闭预览"
+            aria-label={t('fullscreen.close')}
+            title={t('fullscreen.close')}
           >
             <X size={19} />
           </button>
@@ -188,8 +190,8 @@ export function FullscreenPreview({
                 type="button"
                 className="fullscreen-preview-play"
                 onClick={togglePlayback}
-                aria-label="播放"
-                title="播放"
+                aria-label={t('fullscreen.play')}
+                title={t('fullscreen.play')}
               >
                 <Play size={30} fill="currentColor" />
               </button>
@@ -202,8 +204,8 @@ export function FullscreenPreview({
             type="button"
             className="control-button"
             onClick={togglePlayback}
-            title={playing ? '暂停' : '播放'}
-            aria-label={playing ? '暂停' : '播放'}
+            title={playing ? t('fullscreen.pause') : t('fullscreen.play')}
+            aria-label={playing ? t('fullscreen.pause') : t('fullscreen.play')}
           >
             {playing ? <Pause size={17} /> : <Play size={17} />}
           </button>
@@ -216,7 +218,7 @@ export function FullscreenPreview({
             step="0.01"
             value={Math.min(currentTime, previewDuration || duration || 0)}
             onChange={(event) => seekTo(Number(event.currentTarget.value))}
-            aria-label="播放进度"
+            aria-label={t('fullscreen.progress')}
           />
           <span className="timecode">{formatClock(previewDuration || duration)}</span>
         </footer>

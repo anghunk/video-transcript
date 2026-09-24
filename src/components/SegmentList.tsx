@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Plus, Trash2 } from 'lucide-react';
 import type { SubtitleSegment } from '../types';
 import { formatTimestamp, parseTimestamp } from '../lib/format';
@@ -34,6 +35,7 @@ export function SegmentList({
   onDelete,
   onChangeDefaultDuration,
 }: SegmentListProps) {
+  const { t } = useTranslation();
   const addZoneRef = useRef<HTMLButtonElement | null>(null);
   const previousCountRef = useRef(segments.length);
 
@@ -47,12 +49,12 @@ export function SegmentList({
   return (
     <div className="segment-list">
       <div className="segment-settings">
-        <span>默认时长</span>
+        <span>{t('segments.defaultDuration')}</span>
         <div className="segment-settings-actions">
           {selectedId && (
             <span className="selection-shortcut">
               <kbd className="shortcut-hint">Delete</kbd>
-              <span>删除</span>
+              <span>{t('segments.delete')}</span>
             </span>
           )}
           <label className="inline-setting">
@@ -60,11 +62,11 @@ export function SegmentList({
               type="number"
               min="1"
               step="1"
-              aria-label="字幕默认时长"
+              aria-label={t('segments.defaultDurationAria')}
               value={defaultDuration}
               onChange={(event) => onChangeDefaultDuration(Math.max(1, Math.round(Number(event.target.value) || 1)))}
             />
-            <span>秒</span>
+            <span>{t('segments.seconds')}</span>
           </label>
         </div>
       </div>
@@ -86,7 +88,7 @@ export function SegmentList({
                   className="time-input start-input"
                   type="text"
                   inputMode="numeric"
-                  aria-label="字幕开始时间"
+                  aria-label={t('segments.startAria')}
                   value={formatTimestamp(segment.start, false)}
                   onChange={(event) => onChangeStart(segment.id, parseListTime(event.target.value, segment.start))}
                   onClick={(event) => event.stopPropagation()}
@@ -97,7 +99,7 @@ export function SegmentList({
                   className="time-input end-input"
                   type="text"
                   inputMode="numeric"
-                  aria-label="字幕结束时间"
+                  aria-label={t('segments.endAria')}
                   value={formatTimestamp(segment.end, false)}
                   onChange={(event) => onChangeEnd(segment.id, parseListTime(event.target.value, segment.end))}
                   onClick={(event) => event.stopPropagation()}
@@ -107,14 +109,23 @@ export function SegmentList({
               <textarea
                 className="text-input"
                 rows={2}
-                aria-label="字幕文字"
+                aria-label={t('segments.textAria')}
                 value={segment.text}
-                placeholder="输入字幕"
+                placeholder={t('segments.placeholder')}
                 onChange={(event) => onChangeText(segment.id, event.target.value)}
                 onClick={(event) => event.stopPropagation()}
               />
               <div className="row-actions">
-                <button type="button" className="mini-button danger" onClick={(event) => { event.stopPropagation(); onDelete(segment.id); }} title="删除（Delete / Backspace）">
+                <button
+                  type="button"
+                  className="mini-button danger"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDelete(segment.id);
+                  }}
+                  title={t('segments.deleteTitle')}
+                  aria-label={t('segments.delete')}
+                >
                   <Trash2 size={15} />
                 </button>
               </div>
@@ -127,10 +138,10 @@ export function SegmentList({
         type="button"
         className="segment-add-zone"
         onClick={onAdd}
-        title="添加字幕段（⌘/Ctrl + Enter）"
+        title={t('segments.addTitle')}
       >
         <span className="segment-add-icon"><Plus size={17} /></span>
-        <span>{segments.length === 0 ? '添加第一条字幕段' : '添加字幕段'}</span>
+        <span>{segments.length === 0 ? t('segments.addFirst') : t('segments.add')}</span>
         <kbd className="shortcut-hint segment-add-shortcut">⌘/Ctrl + Enter</kbd>
       </button>
     </div>

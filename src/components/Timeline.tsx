@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Minus, Plus } from 'lucide-react';
 import type { DragState, SubtitleSegment } from '../types';
 import { formatTimestamp } from '../lib/format';
@@ -75,6 +76,7 @@ export function Timeline({
   onBarPointerMove,
   onBarPointerUp,
 }: TimelineProps) {
+  const { t } = useTranslation();
   const safeDuration = duration || 1;
   const [zoomPercent, setZoomPercent] = useState(100);
   const [viewportWidth, setViewportWidth] = useState(0);
@@ -179,19 +181,19 @@ export function Timeline({
         <div className="section-heading timeline-heading">
           <div>
             <p>
-              <span>{segments.length} 个字幕段</span>
-              <span className="timeline-heading-hint"> · 拖拽时间轴可改变播放位置</span>
+              <span>{t('timeline.segmentCount', { count: segments.length })}</span>
+              <span className="timeline-heading-hint">{t('timeline.dragHint')}</span>
             </p>
           </div>
         </div>
-        <div className="timeline-zoom-control" role="group" aria-label="时间轴缩放">
+        <div className="timeline-zoom-control" role="group" aria-label={t('timeline.zoom')}>
           <button
             type="button"
             className="timeline-zoom-button"
             onClick={() => stepZoom(-1)}
             disabled={zoomPercent <= MIN_ZOOM_PERCENT}
-            aria-label="缩小时间轴"
-            title="缩小时间轴"
+            aria-label={t('timeline.zoomOut')}
+            title={t('timeline.zoomOut')}
           >
             <Minus size={15} />
           </button>
@@ -204,7 +206,7 @@ export function Timeline({
               step="0.1"
               value={zoomSliderValue}
               onChange={(event) => changeZoom(getZoomFromSliderValue(Number(event.target.value)))}
-              aria-label="时间轴缩放比例"
+              aria-label={t('timeline.zoomLevel')}
               aria-valuetext={`${Math.round(zoomPercent)}%`}
               style={{
                 '--timeline-zoom-progress': `${zoomSliderValue}%`,
@@ -216,8 +218,8 @@ export function Timeline({
             className="timeline-zoom-button"
             onClick={() => stepZoom(1)}
             disabled={zoomPercent >= MAX_ZOOM_PERCENT}
-            aria-label="放大时间轴"
-            title="放大时间轴"
+            aria-label={t('timeline.zoomIn')}
+            title={t('timeline.zoomIn')}
           >
             <Plus size={15} />
           </button>
@@ -275,7 +277,7 @@ export function Timeline({
                 onPointerUp={onBarPointerUp}
                 title={segment.text}
               >
-                <span className="segment-label">{segment.text || '空白'}</span>
+                <span className="segment-label">{segment.text || t('timeline.blank')}</span>
                 <span
                   className="segment-handle start-handle"
                   onPointerDown={(event) => onBarPointerDown(event, segment, 'start')}
