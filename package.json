@@ -2,6 +2,15 @@
   "name": "video-transcript",
   "version": "0.0.0",
   "license": "MIT",
+  "author": {
+    "name": "anghunk",
+    "email": "anghunk@gmail.com",
+    "url": "https://github.com/anghunk"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anghunk/video-transcript.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
