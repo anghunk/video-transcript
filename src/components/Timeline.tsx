@@ -176,6 +176,14 @@ export function Timeline({
   return (
     <div className="timeline">
       <div className="timeline-toolbar">
+        <div className="section-heading timeline-heading">
+          <div>
+            <p>
+              <span>{segments.length} 个字幕段</span>
+              <span className="timeline-heading-hint"> · 拖拽时间轴可改变播放位置</span>
+            </p>
+          </div>
+        </div>
         <div className="timeline-zoom-control" role="group" aria-label="时间轴缩放">
           <button
             type="button"

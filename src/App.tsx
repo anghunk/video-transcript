@@ -11,16 +11,16 @@ import {
 import {
   AudioLines,
   Download,
+  House,
   List,
   LoaderCircle,
-  LogOut,
   Moon,
   Palette,
   Pause,
   Play,
-  RefreshCw,
   RotateCcw,
   Sun,
+  Video,
 } from 'lucide-react';
 import type {
   CacheOffer,
@@ -31,7 +31,6 @@ import type {
   ThemeMode,
 } from './types';
 import { AsrPanel } from './components/AsrPanel';
-import { ConfirmDialog } from './components/ConfirmDialog';
 import { ExportPanel } from './components/ExportPanel';
 import { SegmentList } from './components/SegmentList';
 import { StylePanel } from './components/StylePanel';
@@ -79,16 +78,6 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-type ConfirmAction = {
-  kind: 'exit';
-  message: string;
-  confirmText: string;
-  cancelText: string;
-  confirmVariant: 'default' | 'danger';
-  onConfirm: () => void;
-  onCancel: () => void;
-};
-
 function App() {
   const [route, setRoute] = useState<AppRoute>(getCurrentRoute);
   const [media, setMedia] = useState<SourceMediaRuntime | null>(null);
@@ -106,7 +95,6 @@ function App() {
   const [error, setError] = useState('');
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('subtitles');
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
-  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [cacheOffer, setCacheOffer] = useState<CacheOffer | null>(null);
   const [restoring, setRestoring] = useState(false);
 
@@ -508,7 +496,7 @@ function App() {
 
   useEffect(() => {
     function handleGlobalKeyDown(event: KeyboardEvent) {
-      if (!media || confirmAction || exporting || event.isComposing) return;
+      if (!media || exporting || event.isComposing) return;
 
       const hasCommandModifier = event.metaKey || event.ctrlKey;
       if (
@@ -536,7 +524,6 @@ function App() {
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, [
-    confirmAction,
     currentTime,
     defaultDuration,
     duration,
@@ -757,31 +744,9 @@ function App() {
     setExportProgress(0);
   }
 
-  function promptExit() {
-    setConfirmAction({
-      kind: 'exit',
-      message: '退出编辑器前，字幕进度已自动保存到本地缓存。',
-      confirmText: '保存并退出',
-      cancelText: '继续编辑',
-      confirmVariant: 'default',
-      onConfirm: () => {
-        persistWorkspace()
-          .then(() => {
-            setConfirmAction(null);
-            leaveApp();
-          })
-          .catch(() => {
-            setConfirmAction(null);
-            leaveApp();
-          });
-      },
-      onCancel: () => setConfirmAction(null),
-    });
-  }
-
-  function leaveApp() {
-    // 浏览器不允许脚本静默地真正“退出”单页应用，保存当前进度并回到上传页。
-    resetWorkspace(false);
+  function returnHome() {
+    // 返回首页时保留缓存，方便用户从首页继续上次的工作。
+    void persistWorkspace().finally(() => resetWorkspace(false));
   }
 
   function toggleTheme() {
@@ -811,13 +776,37 @@ function App() {
       ) : media ? (
         <div className="workspace">
           <div className="workspace-main">
+            <header className="workspace-main-header">
+              <div className="workspace-main-heading">
+                <div className="video-facts">
+                  <span className="file-fact" title={media.info.name}>{media.info.name}</span>
+                  <span>{media.info.width}×{media.info.height}</span>
+                  <span>{formatBytes(media.info.size)}</span>
+                  <span>{media.info.videoCodec}</span>
+                  {media.info.hasAudio && <span>{media.info.audioCodec}</span>}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="secondary-button workspace-home-button"
+                onClick={returnHome}
+                title="返回首页"
+                aria-label="返回首页"
+                disabled={exporting}
+              >
+                <House size={15} />
+                <span>返回首页</span>
+              </button>
+            </header>
+
             <section className="preview-column">
             <div className="preview-shell">
               <div
                 className="video-stage"
                 style={{
                   aspectRatio: String(videoAspectRatio),
-                  maxWidth: `${videoAspectRatio * 66}vh`,
+                  // 视频预览按视口高度留出空间，避免挤占下方时间轴。
+                  maxWidth: `${videoAspectRatio * 52}vh`,
                 }}
               >
                 <video
@@ -859,31 +848,6 @@ function App() {
                   <span>添加字幕</span>
                   <kbd className="shortcut-hint">⌘/Ctrl + Enter</kbd>
                 </button>
-              </div>
-
-              <div className="preview-meta">
-                <div className="video-facts">
-                  <span className="file-fact" title={media.info.name}>{media.info.name}</span>
-                  <span>{media.info.width}×{media.info.height}</span>
-                  <span>{formatBytes(media.info.size)}</span>
-                  <span>{media.info.videoCodec}</span>
-                  {media.info.hasAudio && <span>{media.info.audioCodec}</span>}
-                </div>
-
-                <div className="preview-actions" aria-label="工作台操作">
-                  <button type="button" className="reset-button icon" onClick={() => resetWorkspace()} title="更换视频" aria-label="更换视频" disabled={exporting}>
-                    <RefreshCw size={16} />
-                  </button>
-                  <button type="button" className="secondary-button icon" onClick={promptExit} title="退出编辑器" aria-label="退出编辑器" disabled={exporting}>
-                    <LogOut size={16} />
-                  </button>
-                </div>
-
-                <div className="section-heading timeline-heading">
-                  <div>
-                    <p>{segments.length} 个字幕段 · 拖拽时间轴可改变播放位置</p>
-                  </div>
-                </div>
               </div>
             </div>
             </section>
@@ -1043,17 +1007,6 @@ function App() {
         onChange={handleFileChange}
       />
 
-      {confirmAction && confirmAction.kind === 'exit' && (
-        <ConfirmDialog
-          title="退出编辑器"
-          description={confirmAction.message}
-          confirmLabel={confirmAction.confirmText}
-          cancelLabel={confirmAction.cancelText}
-          confirmVariant={confirmAction.confirmVariant}
-          onConfirm={confirmAction.onConfirm}
-          onCancel={confirmAction.onCancel}
-        />
-      )}
     </main>
   );
 }
