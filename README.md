@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="./public/logo.webp" alt="字幕工作室" width="72" />
-  <h1>Video Transcript</h1>
+  <img src="./public/logo.webp" alt="字幕工作室" width="100" />
+  <h2>Video Transcript</h2>
   <p>字幕工作室 · 在浏览器中完成视频字幕编辑与烧录，全程本地处理。</p>
   <p>
     <strong>无需账号</strong> · <strong>无需后端</strong> · <strong>无水印</strong>
