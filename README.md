@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./public/logo.png" alt="字幕工作室" width="72" />
+  <img src="./public/logo.webp" alt="字幕工作室" width="72" />
   <h1>Video Transcript</h1>
   <p>字幕工作室 · 在浏览器中完成视频字幕编辑与烧录，全程本地处理。</p>
   <p>

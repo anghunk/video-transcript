@@ -10,7 +10,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import logoUrl from '../../public/logo.png';
+import logoUrl from '../../public/logo.webp';
 import workspacePreviewUrl from '../../docs/workspace.png';
 import type { CacheOffer, ThemeMode } from '../types';
 import { ParticleField } from './ParticleField';

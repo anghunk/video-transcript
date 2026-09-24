@@ -10,8 +10,8 @@ function publicIndexFallback(): Plugin {
         const pathname = (request as { url?: string }).url?.split('?')[0];
         if (pathname === '/' || pathname === '/app') {
           (request as { url?: string }).url = '/public/index.html';
-        } else if (pathname === '/logo.png') {
-          (request as { url?: string }).url = '/public/logo.png';
+        } else if (pathname === '/logo.webp') {
+          (request as { url?: string }).url = '/public/logo.webp';
         }
         next();
       });
