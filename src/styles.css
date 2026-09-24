@@ -1006,7 +1006,7 @@ h3 {
 .workspace-tabs {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 3px;
 }
 
@@ -1513,6 +1513,10 @@ input[type="color"] {
   transition: width 120ms linear;
 }
 
+.progress-track span.indeterminate {
+  animation: progress-sweep 1.2s ease-in-out infinite;
+}
+
 .progress-copy {
   display: flex;
   justify-content: space-between;
@@ -1559,6 +1563,95 @@ input[type="color"] {
 .export-button {
   width: 100%;
   margin-top: 16px;
+}
+
+.primary-button.compact {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.notice-line {
+  margin-top: 14px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.asr-model-note {
+  margin: 14px 0 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.asr-result {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.asr-result-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-size: 13px;
+}
+
+.asr-result-preview {
+  margin: 0;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.asr-result-preview li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asr-result-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 12px;
+  margin-top: 2px;
+}
+
+.asr-result-actions .primary-button {
+  flex: 1;
+}
+
+.asr-cancel {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.asr-running-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .reset-button {
@@ -1702,6 +1795,15 @@ input[type="color"] {
   }
 }
 
+@keyframes progress-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
 @media (max-width: 1180px) {
   .workspace {
     grid-template-columns: minmax(0, 1fr) minmax(280px, 0.52fr);
@@ -1714,6 +1816,13 @@ input[type="color"] {
   .workspace-main {
     gap: 16px;
     padding: 16px;
+  }
+
+  /* 侧栏变窄后四个标签会互相挤压，这里同步收紧字号与图标间距。 */
+  .workspace-tabs button {
+    gap: 3px;
+    padding: 0 2px;
+    font-size: 11px;
   }
 
 }

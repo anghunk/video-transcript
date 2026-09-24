@@ -9,8 +9,9 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import {
-  List,
+  AudioLines,
   Download,
+  List,
   LoaderCircle,
   LogOut,
   Moon,
@@ -29,6 +30,7 @@ import type {
   SubtitleStyle,
   ThemeMode,
 } from './types';
+import { AsrPanel } from './components/AsrPanel';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { ExportPanel } from './components/ExportPanel';
 import { SegmentList } from './components/SegmentList';
@@ -49,7 +51,7 @@ import {
   type CachedWorkspace,
 } from './lib/storage';
 
-type WorkspaceTab = 'subtitles' | 'style' | 'export';
+type WorkspaceTab = 'subtitles' | 'asr' | 'style' | 'export';
 type AppRoute = '/' | '/app';
 
 const THEME_STORAGE_KEY = 'video-transcript-theme';
@@ -481,6 +483,19 @@ function App() {
     setSelectedId(null);
   }
 
+  /**
+   * 应用语音识别结果：替换现有字幕或追加到末尾。
+   *
+   * @param recognized 识别生成的字幕段
+   * @param mode replace 会覆盖现有字幕，append 会保留现有字幕并排在其后
+   */
+  function handleApplyAsr(recognized: SubtitleSegment[], mode: 'replace' | 'append') {
+    setSegments((current) => (mode === 'replace' ? recognized : sortSegments([...current, ...recognized])));
+    setSelectedId(null);
+    timelineSelectionTimeRef.current = null;
+    setWorkspaceTab('subtitles');
+  }
+
   useEffect(() => {
     function handleGlobalKeyDown(event: KeyboardEvent) {
       if (!media || confirmAction || exporting || event.isComposing) return;
@@ -897,6 +912,15 @@ function App() {
                 <button
                   type="button"
                   role="tab"
+                  aria-selected={workspaceTab === 'asr'}
+                  className={workspaceTab === 'asr' ? 'active' : ''}
+                  onClick={() => setWorkspaceTab('asr')}
+                >
+                  <AudioLines size={15} /> 识别
+                </button>
+                <button
+                  type="button"
+                  role="tab"
                   aria-selected={workspaceTab === 'style'}
                   className={workspaceTab === 'style' ? 'active' : ''}
                   onClick={() => setWorkspaceTab('style')}
@@ -954,6 +978,14 @@ function App() {
                   }}
                   defaultDuration={defaultDuration}
                   onChangeDefaultDuration={setDefaultDuration}
+                />
+              )}
+              {workspaceTab === 'asr' && media && (
+                <AsrPanel
+                  media={media}
+                  existingCount={segments.length}
+                  disabled={exporting}
+                  onApply={handleApplyAsr}
                 />
               )}
               {workspaceTab === 'style' && (
