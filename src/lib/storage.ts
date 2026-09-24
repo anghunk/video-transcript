@@ -113,7 +113,15 @@ export async function loadCachedEdits(): Promise<CachedWorkspace | null> {
   ) {
     return null;
   }
-  return record;
+  return {
+    ...record,
+    segments: record.segments.map((segment) => ({
+      id: segment.id,
+      start: segment.start,
+      end: segment.end,
+      text: segment.text,
+    })),
+  };
 }
 
 /** 读取上次缓存的视频 Blob。 */

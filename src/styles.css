@@ -1,11 +1,11 @@
 :root {
   color-scheme: dark;
-  --bg: #0a0b0f;
-  --surface: #12141a;
-  --surface-raised: #181b22;
-  --surface-muted: #20242e;
-  --border: #292e39;
-  --border-strong: #3b4251;
+  --bg: #05060a;
+  --surface: #141821;
+  --surface-raised: #1b202a;
+  --surface-muted: #252b37;
+  --border: #303744;
+  --border-strong: #454e60;
   --text: #f4f5f7;
   --text-muted: #9da5b4;
   --accent: #f1f3f7;
@@ -13,11 +13,11 @@
   --accent-soft: #dce2eb;
   --danger: #ff6b70;
   --focus: #8ca8ff;
-  --ring: rgba(255, 255, 255, 0.08);
-  --shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
-  --page-glow: rgba(255, 255, 255, 0.035);
-  --grid-line: rgba(255, 255, 255, 0.045);
-  --stage-bg: #050506;
+  --ring: rgba(255, 255, 255, 0.1);
+  --shadow: 0 24px 74px rgba(0, 0, 0, 0.56);
+  --page-glow: rgba(255, 255, 255, 0.045);
+  --grid-line: rgba(255, 255, 255, 0.05);
+  --stage-bg: #030405;
   --preview-line: rgba(255, 255, 255, 0.08);
   --preview-fill: rgba(255, 255, 255, 0.12);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
@@ -1507,15 +1507,6 @@ select:focus {
   margin-bottom: 16px;
 }
 
-.override-chip {
-  padding: 3px 7px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
 .style-presets {
   margin-bottom: 16px;
 }
@@ -1708,13 +1699,6 @@ input[type="color"] {
 
 .danger-text {
   color: var(--danger);
-}
-
-.hint-text {
-  margin: 14px 0 0;
-  color: var(--text-muted);
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 .select-row select {

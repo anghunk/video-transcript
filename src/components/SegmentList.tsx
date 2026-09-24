@@ -91,7 +91,7 @@ export function SegmentList({
                   onChange={(event) => onChangeStart(segment.id, parseListTime(event.target.value, segment.start))}
                   onClick={(event) => event.stopPropagation()}
                 />
-                <span className="time-unit">秒</span>
+                {/* <span className="time-unit">秒</span> */}
                 <span className="time-separator">→</span>
                 <input
                   className="time-input end-input"
@@ -102,7 +102,7 @@ export function SegmentList({
                   onChange={(event) => onChangeEnd(segment.id, parseListTime(event.target.value, segment.end))}
                   onClick={(event) => event.stopPropagation()}
                 />
-                <span className="time-unit">秒</span>
+                {/* <span className="time-unit">秒</span> */}
               </div>
               <textarea
                 className="text-input"

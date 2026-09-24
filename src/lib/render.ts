@@ -38,8 +38,8 @@ function cssColorToRgba(color: string, alpha: number): string {
   return alpha >= 1 ? color : `rgba(0, 0, 0, ${alpha})`;
 }
 
-function resolveStyle(segment: SubtitleSegment, defaultStyle: SubtitleStyle): SubtitleStyle {
-  return { ...DEFAULT_STYLE, ...defaultStyle, ...segment.style };
+function resolveStyle(defaultStyle: SubtitleStyle): SubtitleStyle {
+  return { ...DEFAULT_STYLE, ...defaultStyle };
 }
 
 function drawSubtitleText(
@@ -98,13 +98,14 @@ export function renderFrame(
   options: RenderOptions,
 ): void {
   const { width, height, time, segments, defaultStyle } = options;
+  const style = resolveStyle(defaultStyle);
   context.save();
   context.clearRect(0, 0, width, height);
   context.drawImage(frame, 0, 0, width, height);
 
   for (const segment of segments) {
     if (time >= segment.start && time < segment.end) {
-      drawSubtitleText(context, segment, resolveStyle(segment, defaultStyle), options);
+      drawSubtitleText(context, segment, style, options);
     }
   }
   context.restore();
@@ -116,10 +117,11 @@ export function renderSubtitleOverlay(
   options: RenderOptions,
 ): void {
   const { width, height, time, segments, defaultStyle } = options;
+  const style = resolveStyle(defaultStyle);
   context.clearRect(0, 0, width, height);
   for (const segment of segments) {
     if (time >= segment.start && time < segment.end) {
-      drawSubtitleText(context, segment, resolveStyle(segment, defaultStyle), options);
+      drawSubtitleText(context, segment, style, options);
     }
   }
 }

@@ -22,6 +22,15 @@ function publicIndexFallback(): Plugin {
 export default defineConfig(({ command }) => ({
   root: command === 'build' ? 'public' : undefined,
   publicDir: false,
+  /* 使用外置 WASM 入口，避免把约 26 MB 的 ONNX Runtime 文件复制进 dist。 */
+  resolve: {
+    conditions: [
+      'module',
+      'browser',
+      'development|production',
+      'onnxruntime-web-use-extern-wasm',
+    ],
+  },
   plugins: [
     react(),
     command === 'serve' ? publicIndexFallback() : undefined,

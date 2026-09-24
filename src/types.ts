@@ -17,7 +17,6 @@ export interface SubtitleSegment {
   start: number;
   end: number;
   text: string;
-  style?: Partial<SubtitleStyle>;
 }
 
 export interface VideoMeta {

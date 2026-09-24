@@ -2,7 +2,6 @@ import { DEFAULT_STYLE } from '../lib/render';
 import type {
   SubtitleAlign,
   SubtitlePosition,
-  SubtitleSegment,
   SubtitleStyle,
 } from '../types';
 
@@ -71,24 +70,14 @@ const STYLE_PRESETS: SubtitleStylePreset[] = [
 
 interface StylePanelProps {
   defaultStyle: SubtitleStyle;
-  selectedSegment: SubtitleSegment | null;
-  onChangeDefault: (patch: Partial<SubtitleStyle>) => void;
-  onChangeSelected: (patch: Partial<SubtitleStyle>) => void;
-  segmentsCount: number;
+  onChange: (patch: Partial<SubtitleStyle>) => void;
 }
 
 export function StylePanel({
   defaultStyle,
-  selectedSegment,
-  onChangeDefault,
-  onChangeSelected,
-  segmentsCount,
+  onChange,
 }: StylePanelProps) {
-  const editingSegment = Boolean(selectedSegment);
-  const style = selectedSegment?.style
-    ? { ...DEFAULT_STYLE, ...defaultStyle, ...selectedSegment.style }
-    : { ...DEFAULT_STYLE, ...defaultStyle };
-  const onChange = editingSegment ? onChangeSelected : onChangeDefault;
+  const style = { ...DEFAULT_STYLE, ...defaultStyle };
   const activePresetId = STYLE_PRESETS.find((preset) =>
     Object.entries(preset.style).every(
       ([key, value]) => style[key as keyof SubtitleStyle] === value,
@@ -100,11 +89,8 @@ export function StylePanel({
       <div className="block-heading">
         <div>
           <h3>字幕样式</h3>
-          <p>{editingSegment ? '仅修改当前段落' : '全局默认样式'}</p>
+          <p>应用于全部字幕</p>
         </div>
-        {editingSegment && (
-          <span className="override-chip">段落覆盖</span>
-        )}
       </div>
 
       <div className="style-presets">
@@ -203,10 +189,6 @@ export function StylePanel({
         options={ALIGN_META}
         onChange={(value) => onChange({ align: value as SubtitleAlign })}
       />
-
-      {segmentsCount > 0 && !editingSegment && (
-        <p className="hint-text">选择右侧面板或时间轴中的段落，即可为它单独设置样式。</p>
-      )}
     </div>
   );
 }

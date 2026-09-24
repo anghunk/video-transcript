@@ -1,7 +1,5 @@
 /// <reference lib="webworker" />
 import { env, pipeline } from '@huggingface/transformers';
-import ortFactoryUrl from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url';
-import ortWasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url';
 import {
   ASR_BLOCK_SECONDS,
   ASR_TARGET_SAMPLE_RATE,
@@ -46,26 +44,10 @@ function dtypeFor(device: AsrDevice): unknown {
     : 'q8';
 }
 
-/**
- * 让 ONNX 运行时使用随应用发布的本地 wasm，而不是默认的 jsdelivr CDN。
- *
- * 这样既省掉一次约 27 MB 的额外下载，也不依赖任何 CDN 的可用性；
- * 模型权重依旧从 Hugging Face 官方源下载。在创建推理会话前调用即可生效。
- *
- * 这里刻意引用 `onnxruntime-web` 自身的文件路径，让运行时版本始终与
- * `@huggingface/transformers` 依赖的版本保持一致。
- */
-function useBundledWasmRuntime(): void {
-  const wasmBackend = env.backends.onnx.wasm;
-  if (wasmBackend) wasmBackend.wasmPaths = { wasm: ortWasmUrl, mjs: ortFactoryUrl };
-}
-
 /** 加载（或复用）识别模型，并汇报下载与初始化进度。 */
 async function loadTranscriber(repoId: string, device: AsrDevice): Promise<Transcriber> {
   const key = `${repoId}@${device}`;
   if (loadedModel?.key === key) return loadedModel.transcriber;
-
-  useBundledWasmRuntime();
 
   const files = new Map<string, { loaded: number; total: number }>();
   const progress_callback = (event: RuntimeProgressEvent) => {

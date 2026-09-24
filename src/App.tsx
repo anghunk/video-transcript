@@ -548,23 +548,6 @@ function App() {
     );
   }
 
-  function updateSelectedStyle(patch: Partial<SubtitleStyle>) {
-    if (!selectedId) return;
-    setSegments((current) =>
-      current.map((segment) =>
-        segment.id === selectedId
-          ? {
-              ...segment,
-              style: {
-                ...(segment.style ?? {}),
-                ...patch,
-              },
-            }
-          : segment,
-      ),
-    );
-  }
-
   function updateDefaultStyle(patch: Partial<SubtitleStyle>) {
     setDefaultStyle((current) => ({ ...current, ...patch }));
   }
@@ -968,10 +951,7 @@ function App() {
               {workspaceTab === 'style' && (
                 <StylePanel
                   defaultStyle={defaultStyle}
-                  selectedSegment={selectedSegment}
-                  onChangeDefault={updateDefaultStyle}
-                  onChangeSelected={updateSelectedStyle}
-                  segmentsCount={segments.length}
+                  onChange={updateDefaultStyle}
                 />
               )}
               {workspaceTab === 'export' && (
