@@ -77,6 +77,9 @@ export function SegmentList({
                 currentTime >= segment.start && currentTime < segment.end ? ' active' : ''
               }`}
               onClick={() => onSelect(segment.id)}
+              onFocus={() => {
+                if (selectedId !== segment.id) onSelect(segment.id);
+              }}
             >
               <div className="segment-row-top">
                 <input

@@ -438,6 +438,16 @@ function App() {
     else video.pause();
   }
 
+  function handleResetPlayback() {
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      video.currentTime = 0;
+    }
+    setPlaying(false);
+    setCurrentTime(0);
+  }
+
   function handleSeek(time: number) {
     const clamped = Math.max(0, Math.min(time, duration || 0));
     setCurrentTime(clamped);
@@ -579,6 +589,8 @@ function App() {
     const targetTime = ratio * duration;
     timelineSelectionTimeRef.current = targetTime;
     handleSeek(targetTime);
+    // 触屏上的横向手势交给时间轴滚动容器，轻点仍然用于定位播放头。
+    if (event.pointerType === 'touch') return;
     const updatePlayhead = (pointerEvent: PointerEvent) => {
       const box = trackElement.getBoundingClientRect();
       const nextRatio = Math.max(0, Math.min(1, (pointerEvent.clientX - box.left) / Math.max(1, box.width)));
@@ -839,7 +851,7 @@ function App() {
                 <button type="button" className="control-button" onClick={handlePlayPause} title={playing ? '暂停' : '播放'}>
                   {playing ? <Pause size={17} /> : <Play size={17} />}
                 </button>
-                <button type="button" className="control-button" onClick={() => handleSeek(currentTime - 0.1)} title="后退 0.1 秒">
+                <button type="button" className="control-button" onClick={handleResetPlayback} title="重置播放" aria-label="重置播放">
                   <RotateCcw size={16} />
                 </button>
                 <span className="timecode">{formatClock(currentTime)} / {formatClock(duration)}</span>
@@ -880,6 +892,7 @@ function App() {
             <Timeline
               duration={duration}
               currentTime={currentTime}
+              playing={playing}
               segments={sortedSegments}
               selectedId={selectedId}
               onSelectSegment={(id) => {
