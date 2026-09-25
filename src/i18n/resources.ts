@@ -289,11 +289,11 @@ export const zhCN = {
 
 export const enUS = {
   meta: {
-    title: 'Subtitle Studio',
+    title: 'Video Transcript',
     description: 'Edit and burn in subtitles in your browser, with video kept on your device.',
   },
   common: {
-    brandName: 'Subtitle Studio',
+    brandName: 'Video Transcript',
     close: 'Close',
     cancel: 'Cancel',
     theme: {
@@ -307,7 +307,7 @@ export const enUS = {
     },
   },
   landing: {
-    homeLabel: 'Back to Subtitle Studio home',
+    homeLabel: 'Back to Video Transcript home',
     githubLabel: 'Open the GitHub project',
     projects: 'Projects',
     kicker: 'Local video subtitle tool',
@@ -329,9 +329,9 @@ export const enUS = {
     trustLocal: 'Local processing',
     trustResolution: 'Original resolution',
     trustWatermark: 'No watermark',
-    previewAria: 'Subtitle Studio interface preview',
-    frameTitle: 'Subtitle Studio · Workspace',
-    previewAlt: 'Subtitle Studio workspace with video preview, subtitle timeline, and editing panel',
+    previewAria: 'Video Transcript interface preview',
+    frameTitle: 'Video Transcript · Workspace',
+    previewAlt: 'Video Transcript workspace with video preview, subtitle timeline, and editing panel',
     footerPrivacy: 'Your video stays on your device',
   },
   projects: {

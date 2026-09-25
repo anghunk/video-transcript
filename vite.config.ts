@@ -1,5 +1,18 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+
+const PUBLIC_ASSET_PATHS = new Set([
+  '/logo.webp',
+  '/sw.js',
+  '/site.webmanifest',
+  '/favicon-16x16.png',
+  '/favicon-32x32.png',
+  '/apple-touch-icon.png',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/pwa-maskable-512.png',
+]);
 
 /** 开发环境把 SPA 路由重写到 public 下的入口文件。 */
 function publicIndexFallback(): Plugin {
@@ -15,11 +28,28 @@ function publicIndexFallback(): Plugin {
           || pathname?.startsWith('/projects/')
         ) {
           (request as { url?: string }).url = '/public/index.html';
-        } else if (pathname === '/logo.webp') {
-          (request as { url?: string }).url = '/public/logo.webp';
+        } else if (pathname && PUBLIC_ASSET_PATHS.has(pathname)) {
+          (request as { url?: string }).url = `/public${pathname}`;
         }
         next();
       });
+    },
+  };
+}
+
+/** 构建时把 PWA 入口文件按站点根路径原样输出，避免被 Vite 改写为哈希资源。 */
+function emitPwaAssets(): Plugin {
+  return {
+    name: 'emit-pwa-assets',
+    apply: 'build',
+    generateBundle() {
+      for (const pathname of PUBLIC_ASSET_PATHS) {
+        this.emitFile({
+          type: 'asset',
+          fileName: pathname.slice(1),
+          source: readFileSync(new URL(`./public${pathname}`, import.meta.url)),
+        });
+      }
     },
   };
 }
@@ -39,6 +69,7 @@ export default defineConfig(({ command }) => ({
   plugins: [
     react(),
     command === 'serve' ? publicIndexFallback() : undefined,
+    command === 'build' ? emitPwaAssets() : undefined,
   ],
   build: {
     target: 'es2022',
