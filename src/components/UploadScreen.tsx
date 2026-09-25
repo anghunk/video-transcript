@@ -2,31 +2,28 @@ import { useRef, useState, type DragEvent as ReactDragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   FileVideo,
+  FolderOpen,
   Github,
   LoaderCircle,
   Moon,
-  RotateCcw,
   ShieldCheck,
   Sun,
-  Trash2,
   Upload,
 } from 'lucide-react';
 import logoUrl from '../../public/logo.webp';
 import workspacePreviewUrl from '../../docs/workspace.png';
-import type { CacheOffer, ThemeMode } from '../types';
+import type { ThemeMode } from '../types';
 import { LanguageToggle } from './LanguageToggle';
 import { ParticleField } from './ParticleField';
 
 interface UploadScreenProps {
   loading: boolean;
   error: string;
-  cacheOffer: CacheOffer | null;
   restoring: boolean;
   theme: ThemeMode;
   onToggleTheme: () => void;
   onSelect: () => void;
-  onRestore: () => void;
-  onDiscard: () => void;
+  onOpenProjects: () => void;
   onDrop: (event: ReactDragEvent<HTMLDivElement>) => void;
 }
 
@@ -39,13 +36,11 @@ interface UploadScreenProps {
 export function UploadScreen({
   loading,
   error,
-  cacheOffer,
   restoring,
   theme,
   onToggleTheme,
   onSelect,
-  onRestore,
-  onDiscard,
+  onOpenProjects,
   onDrop,
 }: UploadScreenProps) {
   const { t } = useTranslation();
@@ -75,39 +70,6 @@ export function UploadScreen({
       <div className="grid-cursor-focus" aria-hidden="true" />
       <ParticleField theme={theme} />
 
-      {cacheOffer && (
-        <div className="cache-banner" role="status" aria-live="polite">
-          <div className="cache-banner-inner">
-            <div className="cache-banner-status">
-              <span className="cache-banner-icon"><FileVideo size={17} /></span>
-              <div className="cache-banner-copy">
-                <strong>{t('landing.cacheFound')}</strong>
-                <span>{cacheOffer.fileName} · {cacheOffer.savedAt}</span>
-              </div>
-            </div>
-            <div className="cache-banner-actions">
-              <button
-                type="button"
-                className="secondary-button cache-banner-button"
-                onClick={onDiscard}
-                disabled={restoring}
-              >
-                <Trash2 size={15} /> {t('landing.discard')}
-              </button>
-              <button
-                type="button"
-                className="primary-button cache-banner-button"
-                onClick={onRestore}
-                disabled={restoring}
-              >
-                {restoring ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}
-                {restoring ? t('landing.restoring') : t('landing.continueEditing')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <header className="landing-nav">
         <a className="landing-brand" href="/" aria-label={t('landing.homeLabel')}>
           <span className="landing-logo">
@@ -120,6 +82,14 @@ export function UploadScreen({
         </a>
 
         <div className="landing-nav-actions">
+          <button
+            type="button"
+            className="landing-projects"
+            onClick={onOpenProjects}
+          >
+            <FolderOpen size={17} />
+            <span>{t('landing.projects')}</span>
+          </button>
           <a
             className="landing-github"
             href="https://github.com/anghunk/video-transcript"

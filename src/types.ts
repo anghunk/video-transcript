@@ -41,11 +41,6 @@ export interface ExportEvents {
 
 export type ThemeMode = 'dark' | 'light';
 
-export interface CacheOffer {
-  fileName: string;
-  savedAt: string;
-}
-
 export interface DragState {
   segmentId: string;
   edge: 'start' | 'end' | 'body';

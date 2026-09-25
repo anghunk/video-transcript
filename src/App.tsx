@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import {
   AudioLines,
   Download,
-  House,
+  FolderOpen,
   List,
   LoaderCircle,
   Maximize2,
@@ -26,7 +26,6 @@ import {
   Video,
 } from 'lucide-react';
 import type {
-  CacheOffer,
   DragState,
   ExportQuality,
   SubtitleSegment,
@@ -40,30 +39,66 @@ import { SegmentList } from './components/SegmentList';
 import { StylePanel } from './components/StylePanel';
 import { Timeline } from './components/Timeline';
 import { UploadScreen } from './components/UploadScreen';
+import { ProjectsScreen } from './components/ProjectsScreen';
 import { DEFAULT_STYLE, hasActiveSubtitle, renderSubtitleOverlay } from './lib/render';
 import { createSegmentId, clampSegment, sortSegments } from './lib/subtitles';
 import { formatBytes, formatClock } from './lib/format';
 import type { SourceMediaRuntime } from './lib/media';
+import { createVideoThumbnail } from './lib/thumbnail';
 import {
-  clearWorkspaceCache,
-  hasWorkspaceCache,
-  loadCachedEdits,
-  loadCachedVideo,
-  saveCachedVideo,
-  saveWorkspaceCache,
-  type CachedWorkspace,
+  createProjectId,
+  createProjectName,
+  deleteProject as deleteStoredProject,
+  getStorageEstimate,
+  listProjects,
+  loadProject,
+  loadProjectVideo,
+  renameProject as renameStoredProject,
+  requestPersistentStorage,
+  saveProject,
+  saveProjectVideo,
+  touchProject,
+  type ProjectSummary,
+  type StorageEstimate,
+  type StoredProject,
 } from './lib/storage';
 
 type WorkspaceTab = 'subtitles' | 'asr' | 'style' | 'export';
-type AppRoute = '/' | '/app';
+type AppRoute =
+  | { name: 'landing'; path: '/' }
+  | { name: 'projects'; path: '/projects' }
+  | { name: 'workspace'; path: string; projectId: string };
+
+interface UploadIntent {
+  type: 'create' | 'relink';
+  projectId?: string;
+}
 
 const THEME_STORAGE_KEY = 'video-transcript-theme';
 const TIMELINE_SNAP_THRESHOLD_PX = 8;
 
-/** 读取当前页面对应的应用路由。 */
+/** 解析当前页面对应的应用路由，未知路径统一回到落地页。 */
 function getCurrentRoute(): AppRoute {
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
-  return pathname === '/app' ? '/app' : '/';
+  if (pathname === '/projects') {
+    return { name: 'projects', path: '/projects' };
+  }
+
+  const projectMatch = pathname.match(/^\/projects\/([^/]+)$/);
+  if (projectMatch) {
+    try {
+      const projectId = decodeURIComponent(projectMatch[1]);
+      return {
+        name: 'workspace',
+        path: `/projects/${encodeURIComponent(projectId)}`,
+        projectId,
+      };
+    } catch {
+      return { name: 'landing', path: '/' };
+    }
+  }
+
+  return { name: 'landing', path: '/' };
 }
 
 function getInitialTheme(): ThemeMode {
@@ -85,8 +120,13 @@ function isEditableTarget(target: EventTarget | null): boolean {
 function App() {
   const { t } = useTranslation();
   const [route, setRoute] = useState<AppRoute>(getCurrentRoute);
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState('');
+  const [storageEstimate, setStorageEstimate] = useState<StorageEstimate | null>(null);
   const [media, setMedia] = useState<SourceMediaRuntime | null>(null);
   const [mediaUrl, setMediaUrl] = useState('');
+  const [loadedProjectId, setLoadedProjectId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -100,7 +140,6 @@ function App() {
   const [error, setError] = useState('');
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('subtitles');
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
-  const [cacheOffer, setCacheOffer] = useState<CacheOffer | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [fullscreenPreviewOpen, setFullscreenPreviewOpen] = useState(false);
 
@@ -118,25 +157,12 @@ function App() {
     onMove: (event: PointerEvent) => void;
     onUp: () => void;
   } | null>(null);
-  const restoreLockRef = useRef(false);
-  const workspaceStateRef = useRef<CachedWorkspace>({
-    projectName: '',
-    videoSize: 0,
-    videoWidth: 0,
-    videoHeight: 0,
-    videoDuration: 0,
-    videoCodec: '',
-    hasAudio: false,
-    audioCodec: undefined,
-    defaultDuration: 2,
-    quality: 'native',
-    includeAudio: true,
-    defaultStyle: DEFAULT_STYLE,
-    segments: [],
-    savedAt: Date.now(),
-  });
+  const workspaceLoadTokenRef = useRef(0);
+  const uploadIntentRef = useRef<UploadIntent | null>(null);
+  const workspaceStateRef = useRef<StoredProject | null>(null);
 
   const sortedSegments = useMemo(() => sortSegments(segments), [segments]);
+  const routeProjectId = route.name === 'workspace' ? route.projectId : null;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -152,6 +178,13 @@ function App() {
     return () => {
       if (mediaUrl) URL.revokeObjectURL(mediaUrl);
     };
+  }, [mediaUrl]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !mediaUrl) return;
+    video.load();
+    video.currentTime = 0;
   }, [mediaUrl]);
 
   useEffect(() => {
@@ -197,46 +230,97 @@ function App() {
     [segments, selectedId],
   );
 
+  const refreshProjects = useCallback(async (showLoading = false) => {
+    if (showLoading) setProjectsLoading(true);
+    try {
+      const nextProjects = await listProjects();
+      setProjects(nextProjects);
+      setProjectsError('');
+    } catch (caughtError) {
+      setProjectsError(
+        caughtError instanceof Error ? caughtError.message : t('errors.projectListFailed'),
+      );
+    } finally {
+      if (showLoading) setProjectsLoading(false);
+    }
+  }, [t]);
+
   useEffect(() => {
+    const current = workspaceStateRef.current;
+    if (!current || current.id !== loadedProjectId) return;
     workspaceStateRef.current = {
-      projectName: media?.info.name ?? '',
-      videoSize: media?.info.size ?? 0,
-      videoWidth: media?.info.width ?? 0,
-      videoHeight: media?.info.height ?? 0,
+      ...current,
+      projectName: media?.info.name ?? current.projectName,
+      videoSize: media?.info.size ?? current.videoSize,
+      videoWidth: media?.info.width ?? current.videoWidth,
+      videoHeight: media?.info.height ?? current.videoHeight,
       videoDuration: duration,
-      videoCodec: media?.info.videoCodec ?? '',
-      hasAudio: media?.info.hasAudio ?? false,
-      audioCodec: media?.info.audioCodec ?? undefined,
+      videoCodec: media?.info.videoCodec ?? current.videoCodec,
+      hasAudio: media?.info.hasAudio ?? current.hasAudio,
+      audioCodec: media?.info.audioCodec || current.audioCodec,
       defaultDuration,
       quality,
       includeAudio,
       defaultStyle,
       segments,
-      savedAt: Date.now(),
     };
-  }, [media, duration, defaultDuration, quality, includeAudio, defaultStyle, segments]);
+  }, [
+    defaultDuration,
+    defaultStyle,
+    duration,
+    includeAudio,
+    loadedProjectId,
+    media,
+    quality,
+    segments,
+  ]);
 
   async function persistWorkspace(): Promise<void> {
-    if (!media) return;
-    await saveWorkspaceCache({ ...workspaceStateRef.current, savedAt: Date.now() });
+    const current = workspaceStateRef.current;
+    if (!media || !current || current.id !== loadedProjectId || routeProjectId !== current.id) {
+      return;
+    }
+    const now = Date.now();
+    const nextProject: StoredProject = {
+      ...current,
+      savedAt: now,
+      updatedAt: now,
+    };
+    workspaceStateRef.current = nextProject;
+    try {
+      await saveProject(nextProject);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error ? caughtError.message : t('errors.projectSaveFailed'),
+      );
+    }
   }
 
   useEffect(() => {
-    if (!media) return;
+    if (!media || !loadedProjectId || routeProjectId !== loadedProjectId) return;
     const timer = window.setTimeout(() => {
       void persistWorkspace();
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [media, segments, defaultStyle, defaultDuration, quality, includeAudio]);
+  }, [
+    defaultDuration,
+    defaultStyle,
+    includeAudio,
+    loadedProjectId,
+    media,
+    quality,
+    routeProjectId,
+    segments,
+  ]);
 
   useEffect(() => {
-    if (!media) return;
+    if (!media || !loadedProjectId || routeProjectId !== loadedProjectId) return;
     function handlePageHide() {
       void persistWorkspace();
     }
     window.addEventListener('pagehide', handlePageHide);
     return () => window.removeEventListener('pagehide', handlePageHide);
-  }, [media]);
+  }, [loadedProjectId, media, routeProjectId]);
 
   useLayoutEffect(() => {
     if (workspacePanelRef.current) {
@@ -246,10 +330,11 @@ function App() {
 
   useEffect(() => {
     function syncRoute() {
-      if (getCurrentRoute() === '/' && window.location.pathname !== '/') {
+      const nextRoute = getCurrentRoute();
+      if (nextRoute.name === 'landing' && window.location.pathname !== '/') {
         window.history.replaceState(null, '', '/');
       }
-      setRoute(getCurrentRoute());
+      setRoute(nextRoute);
     }
 
     syncRoute();
@@ -258,168 +343,266 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (route !== '/') return;
+    if (route.name !== 'projects') return;
+    void refreshProjects(true);
+    void getStorageEstimate().then(setStorageEstimate);
+  }, [refreshProjects, route.name]);
 
+  useEffect(() => {
+    if (route.name !== 'workspace') return;
+    if (loadedProjectId === route.projectId && media) return;
+
+    const token = ++workspaceLoadTokenRef.current;
     let cancelled = false;
+    setRestoring(true);
+    setError('');
     void (async () => {
       try {
-        const [edits, video] = await Promise.all([loadCachedEdits(), loadCachedVideo()]);
-        if (cancelled) return;
-        if (!edits || !video) {
-          setCacheOffer(null);
+        const [project, video] = await Promise.all([
+          loadProject(route.projectId),
+          loadProjectVideo(route.projectId),
+        ]);
+        if (cancelled || token !== workspaceLoadTokenRef.current) return;
+        if (!project) {
+          throw new Error(t('projects.notFound'));
+        }
+        if (!video) {
+          setProjectsError(t('projects.relinkRequired', { name: project.name }));
+          navigate('/projects', { replace: true });
           return;
         }
-        setCacheOffer({
-          fileName: video.fileName,
-          savedAt: new Date(edits.savedAt).toLocaleString(),
+        const file = new File([video.blob], video.fileName, { type: 'video/mp4' });
+        const runtime = await parseMediaFile(file);
+        if (!runtime || cancelled || token !== workspaceLoadTokenRef.current) return;
+        applyProjectWorkspace(project, runtime);
+        void cacheProjectThumbnail(project, file);
+        void touchProject(project.id).then((touched) => {
+          if (!touched || workspaceStateRef.current?.id !== touched.id) return;
+          workspaceStateRef.current = {
+            ...workspaceStateRef.current,
+            lastOpenedAt: touched.lastOpenedAt,
+          };
         });
-      } catch {
-        if (!cancelled) setCacheOffer(null);
+      } catch (caughtError) {
+        if (cancelled || token !== workspaceLoadTokenRef.current) return;
+        setProjectsError(
+          caughtError instanceof Error ? caughtError.message : t('errors.restoreCacheFailed'),
+        );
+        navigate('/projects', { replace: true });
+      } finally {
+        if (!cancelled && token === workspaceLoadTokenRef.current) {
+          setRestoring(false);
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [media, route]);
-
-  useEffect(() => {
-    if (route !== '/app' || media || restoreLockRef.current) return;
-
-    restoreLockRef.current = true;
-    setRestoring(true);
-    setError('');
-    void (async () => {
-      try {
-        if (!(await hasWorkspaceCache())) {
-          navigate('/', { replace: true });
-          return;
-        }
-        const restored = await restoreCachedWorkspace();
-        if (!restored) navigate('/', { replace: true });
-      } catch (caughtError) {
-        setError(caughtError instanceof Error ? caughtError.message : t('errors.restoreCacheFailed'));
-        navigate('/', { replace: true });
-      } finally {
-        restoreLockRef.current = false;
-        setRestoring(false);
-      }
-    })();
-  }, [media, route]);
+  }, [
+    loadedProjectId,
+    media,
+    route.name,
+    route.name === 'workspace' ? route.projectId : null,
+  ]);
 
   /** 使用 History API 切换应用路由。 */
-  function navigate(path: AppRoute, options: { replace?: boolean } = {}) {
+  function navigate(path: string, options: { replace?: boolean } = {}) {
     if (window.location.pathname !== path) {
       if (options.replace) window.history.replaceState(null, '', path);
       else window.history.pushState(null, '', path);
     }
-    setRoute(path);
+    setRoute(getCurrentRoute());
   }
 
-  async function restoreCachedWorkspace(): Promise<boolean> {
+  function projectPath(projectId: string): string {
+    return `/projects/${encodeURIComponent(projectId)}`;
+  }
+
+  /** 将项目编辑状态与已解析媒体一起装载到工作台。 */
+  function applyProjectWorkspace(project: StoredProject, runtime: SourceMediaRuntime) {
+    const nextUrl = URL.createObjectURL(
+      new Blob([runtime.info.buffer], { type: 'video/mp4' }),
+    );
+    setMedia(runtime);
+    setMediaUrl(nextUrl);
+    setLoadedProjectId(project.id);
+    setCurrentTime(0);
+    timelineSelectionTimeRef.current = null;
+    setDuration(runtime.info.duration);
+    setPlaying(false);
+    setSegments(project.segments);
+    setSelectedId(null);
+    setDefaultStyle(project.defaultStyle);
+    setDefaultDuration(project.defaultDuration);
+    setQuality(project.quality);
+    setIncludeAudio(project.includeAudio);
+    setExporting(false);
+    setExportProgress(0);
+    setWorkspaceTab('subtitles');
+    workspaceStateRef.current = project;
+  }
+
+  /**
+   * 为缺少缩略图的项目截取视频第 1 秒画面并回写项目记录。
+   *
+   * 缩略图属于非关键增强数据，生成失败或项目已被删除时直接跳过。
+   */
+  async function cacheProjectThumbnail(project: StoredProject, source: Blob): Promise<void> {
+    if (project.thumbnail) return;
+    const thumbnail = await createVideoThumbnail(source);
+    if (!thumbnail) return;
+
+    const latest = workspaceStateRef.current?.id === project.id
+      ? workspaceStateRef.current
+      : await loadProject(project.id);
+    if (!latest) return;
+
+    const nextProject = { ...latest, thumbnail };
+    if (workspaceStateRef.current?.id === project.id) {
+      workspaceStateRef.current = nextProject;
+    }
     try {
-      const [edits, video] = await Promise.all([loadCachedEdits(), loadCachedVideo()]);
-      if (!edits || !video) return false;
-      const file = new File([video.blob], video.fileName, { type: 'video/mp4' });
-      const opened = await openFile(file, { cacheVideo: false });
-      if (!opened) return false;
-      setSegments(edits.segments);
-      setSelectedId(null);
-      setDefaultStyle(edits.defaultStyle);
-      setDefaultDuration(edits.defaultDuration);
-      setQuality(edits.quality);
-      setIncludeAudio(edits.includeAudio);
-      return true;
-    } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : t('errors.restoreCacheFailed'));
-      return false;
+      await saveProject(nextProject);
+      await refreshProjects();
+    } catch {
+      // 缩略图写入失败不影响项目创建、打开或编辑。
     }
   }
 
-  function restoreFromCache() {
-    setRestoring(true);
-    setError('');
-    void restoreCachedWorkspace()
-      .then((restored) => {
-        if (!restored) return;
-        setCacheOffer(null);
-        navigate('/app');
-      })
-      .finally(() => setRestoring(false));
-  }
-
-  function discardCachedWorkspace() {
-    setCacheOffer(null);
-    setError('');
-    void clearWorkspaceCache();
-  }
-
-  function requestUpload() {
-    fileInputRef.current?.click();
-  }
-
-  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (await openFile(file)) {
-      setCacheOffer(null);
-      navigate('/app');
-    }
-    event.target.value = '';
-  }
-
-  async function openFile(
-    file: File,
-    options: { cacheVideo?: boolean } = {},
-  ): Promise<boolean> {
+  /** 解析文件并校验视频轨道，不直接改动工作台状态。 */
+  async function parseMediaFile(file: File): Promise<SourceMediaRuntime | null> {
     if (!file.type.startsWith('video/') && !file.name.toLowerCase().endsWith('.mp4')) {
       setError(t('errors.selectMp4'));
-      return false;
+      return null;
     }
     setError('');
     setLoading(true);
-    setExporting(false);
-    setExportProgress(0);
     try {
       const { loadSourceMedia } = await import('./lib/media');
       const runtime = await loadSourceMedia(file);
       if (!runtime.videoTrack || !runtime.videoConfig) {
         throw new Error(t('errors.noDecodableVideoTrack'));
       }
-      if (mediaUrl) URL.revokeObjectURL(mediaUrl);
-      const nextUrl = URL.createObjectURL(new Blob([runtime.info.buffer], { type: 'video/mp4' }));
-      setMedia(runtime);
-      setMediaUrl(nextUrl);
-      setCurrentTime(0);
-      timelineSelectionTimeRef.current = null;
-      setDuration(runtime.info.duration);
-      setSegments([]);
-      setSelectedId(null);
-      if (options.cacheVideo !== false) void saveCachedVideo(file, file.name);
-      const video = videoRef.current;
-      if (video) {
-        video.load();
-        video.currentTime = 0;
-      }
-      return true;
+      return runtime;
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : t('errors.videoParseFailed'));
-      return false;
+      return null;
     } finally {
       setLoading(false);
     }
+  }
+
+  async function createProjectFromFile(file: File): Promise<boolean> {
+    const runtime = await parseMediaFile(file);
+    if (!runtime) return false;
+
+    const now = Date.now();
+    const project: StoredProject = {
+      id: createProjectId(),
+      name: createProjectName(file.name),
+      createdAt: now,
+      updatedAt: now,
+      lastOpenedAt: now,
+      projectName: file.name,
+      videoSize: file.size,
+      videoWidth: runtime.info.width,
+      videoHeight: runtime.info.height,
+      videoDuration: runtime.info.duration,
+      videoCodec: runtime.info.videoCodec,
+      hasAudio: runtime.info.hasAudio,
+      audioCodec: runtime.info.audioCodec || undefined,
+      defaultDuration: 2,
+      quality: 'native',
+      includeAudio: true,
+      defaultStyle: DEFAULT_STYLE,
+      segments: [],
+      savedAt: now,
+    };
+
+    applyProjectWorkspace(project, runtime);
+    void requestPersistentStorage();
+    try {
+      await saveProject(project);
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error ? caughtError.message : t('errors.projectSaveFailed'),
+      );
+    }
+    const videoCached = await saveProjectVideo(project.id, file, file.name);
+    if (!videoCached) setError(t('projects.videoCacheFailed'));
+    void cacheProjectThumbnail(project, file);
+    void refreshProjects();
+    navigate(projectPath(project.id));
+    return true;
+  }
+
+  async function relinkProjectFile(projectId: string, file: File): Promise<boolean> {
+    try {
+      const project = await loadProject(projectId);
+      if (!project) throw new Error(t('projects.notFound'));
+      const runtime = await parseMediaFile(file);
+      if (!runtime) return false;
+
+      const now = Date.now();
+      const updatedProject: StoredProject = {
+        ...project,
+        projectName: file.name,
+        videoSize: file.size,
+        videoWidth: runtime.info.width,
+        videoHeight: runtime.info.height,
+        videoDuration: runtime.info.duration,
+        videoCodec: runtime.info.videoCodec,
+        hasAudio: runtime.info.hasAudio,
+        audioCodec: runtime.info.audioCodec || undefined,
+        updatedAt: now,
+        savedAt: now,
+      };
+      applyProjectWorkspace(updatedProject, runtime);
+      try {
+        await saveProject(updatedProject);
+      } catch (caughtError) {
+        setError(
+          caughtError instanceof Error ? caughtError.message : t('errors.projectSaveFailed'),
+        );
+      }
+      const videoCached = await saveProjectVideo(projectId, file, file.name);
+      if (!videoCached) setError(t('projects.videoCacheFailed'));
+      void cacheProjectThumbnail(updatedProject, file);
+      void refreshProjects();
+      navigate(projectPath(projectId));
+      return true;
+    } catch (caughtError) {
+      setProjectsError(
+        caughtError instanceof Error ? caughtError.message : t('errors.restoreCacheFailed'),
+      );
+      return false;
+    }
+  }
+
+  function requestUpload(intent: UploadIntent) {
+    uploadIntentRef.current = intent;
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const intent = uploadIntentRef.current ?? { type: 'create' } satisfies UploadIntent;
+    if (intent.type === 'relink' && intent.projectId) {
+      await relinkProjectFile(intent.projectId, file);
+    } else {
+      await createProjectFromFile(file);
+    }
+    event.target.value = '';
   }
 
   function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
     event.preventDefault();
     const file = event.dataTransfer.files?.[0];
     if (file) {
-      void openFile(file).then((opened) => {
-        if (opened) {
-          setCacheOffer(null);
-          navigate('/app');
-        }
-      });
+      void createProjectFromFile(file);
     }
   }
 
@@ -732,14 +915,10 @@ function App() {
     }
   }
 
-  function resetWorkspace(clearCache = true) {
-    if (clearCache) {
-      setCacheOffer(null);
-      void clearWorkspaceCache();
-    }
-    navigate('/');
+  function resetWorkspaceState() {
     setMedia(null);
     setMediaUrl('');
+    setLoadedProjectId(null);
     setCurrentTime(0);
     timelineSelectionTimeRef.current = null;
     setDuration(0);
@@ -749,11 +928,45 @@ function App() {
     setError('');
     setExporting(false);
     setExportProgress(0);
+    workspaceStateRef.current = null;
   }
 
-  function returnHome() {
-    // 返回首页时保留缓存，方便用户从首页继续上次的工作。
-    void persistWorkspace().finally(() => resetWorkspace(false));
+  async function returnToProjects() {
+    await persistWorkspace();
+    resetWorkspaceState();
+    navigate('/projects');
+  }
+
+  function openProjects() {
+    navigate('/projects');
+  }
+
+  function openProject(projectId: string) {
+    setProjectsError('');
+    navigate(projectPath(projectId));
+  }
+
+  async function handleRenameProject(projectId: string, name: string) {
+    try {
+      await renameStoredProject(projectId, name);
+      await refreshProjects();
+    } catch (caughtError) {
+      setProjectsError(
+        caughtError instanceof Error ? caughtError.message : t('errors.projectSaveFailed'),
+      );
+    }
+  }
+
+  async function handleDeleteProject(projectId: string) {
+    try {
+      await deleteStoredProject(projectId);
+      await refreshProjects();
+      setStorageEstimate(await getStorageEstimate());
+    } catch (caughtError) {
+      setProjectsError(
+        caughtError instanceof Error ? caughtError.message : t('errors.cacheClearFailed'),
+      );
+    }
   }
 
   function toggleTheme() {
@@ -767,20 +980,34 @@ function App() {
 
   return (
     <main className="app-shell">
-      {route === '/' ? (
+      {route.name === 'landing' ? (
         <UploadScreen
-          cacheOffer={cacheOffer}
           loading={loading}
           error={error}
           restoring={restoring}
           theme={theme}
           onToggleTheme={toggleTheme}
-          onSelect={requestUpload}
-          onRestore={restoreFromCache}
-          onDiscard={discardCachedWorkspace}
+          onSelect={() => requestUpload({ type: 'create' })}
+          onOpenProjects={openProjects}
           onDrop={handleDrop}
         />
-      ) : media ? (
+      ) : route.name === 'projects' ? (
+        <ProjectsScreen
+          projects={projects}
+          loading={projectsLoading}
+          error={projectsError}
+          storageEstimate={storageEstimate}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onBackHome={() => navigate('/')}
+          onCreate={() => requestUpload({ type: 'create' })}
+          onOpen={openProject}
+          onRelink={(projectId) => requestUpload({ type: 'relink', projectId })}
+          onRename={handleRenameProject}
+          onDelete={handleDeleteProject}
+          onDropFile={(file) => void createProjectFromFile(file)}
+        />
+      ) : media && loadedProjectId === route.projectId ? (
         <div className="workspace">
           <div className="workspace-main">
             <header className="workspace-main-header">
@@ -796,15 +1023,17 @@ function App() {
               <button
                 type="button"
                 className="secondary-button workspace-home-button"
-                onClick={returnHome}
-                title={t('workspace.home')}
-                aria-label={t('workspace.home')}
+                onClick={() => void returnToProjects()}
+                title={t('workspace.projects')}
+                aria-label={t('workspace.projects')}
                 disabled={exporting}
               >
-                <House size={15} />
-                <span>{t('workspace.home')}</span>
+                <FolderOpen size={15} />
+                <span>{t('workspace.projects')}</span>
               </button>
             </header>
+
+            {error && <div className="error-line workspace-error" role="alert">{error}</div>}
 
             <section className="preview-column">
             <div className="preview-shell">
@@ -1013,7 +1242,7 @@ function App() {
                   progress={exportProgress}
                   phase={exportPhase}
                   segmentsCount={segments.length}
-                  error={error}
+                  error=""
                   onQualityChange={setQuality}
                   onIncludeAudioChange={setIncludeAudio}
                   onExport={() => void handleExport()}

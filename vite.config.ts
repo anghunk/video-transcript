@@ -8,7 +8,12 @@ function publicIndexFallback(): Plugin {
     configureServer(server) {
       server.middlewares.use((request, _response, next) => {
         const pathname = (request as { url?: string }).url?.split('?')[0];
-        if (pathname === '/' || pathname === '/app') {
+        if (
+          pathname === '/'
+          || pathname === '/app'
+          || pathname === '/projects'
+          || pathname?.startsWith('/projects/')
+        ) {
           (request as { url?: string }).url = '/public/index.html';
         } else if (pathname === '/logo.webp') {
           (request as { url?: string }).url = '/public/logo.webp';
