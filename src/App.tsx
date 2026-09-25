@@ -231,13 +231,11 @@ function App() {
 
   useEffect(() => {
     if (!media) return;
-    function handleBeforeUnload(event: BeforeUnloadEvent) {
+    function handlePageHide() {
       void persistWorkspace();
-      event.preventDefault();
-      event.returnValue = '';
     }
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
+    return () => window.removeEventListener('pagehide', handlePageHide);
   }, [media]);
 
   useLayoutEffect(() => {
